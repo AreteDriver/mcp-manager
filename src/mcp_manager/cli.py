@@ -18,6 +18,7 @@ from mcp_manager.health import HealthChecker
 from mcp_manager.mapper import build_server_map
 from mcp_manager.models import McpServer, NetworkConfig, ServerStatus, StdioConfig, TransportType
 from mcp_manager.registry import ServerRegistry
+from mcp_manager.telemetry import track_command
 
 app = typer.Typer(
     name="mcp-manager",
@@ -92,6 +93,7 @@ def list_servers(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """List all configured MCP servers across tools."""
+    track_command("list")
     try:
         servers = _discover(tool=tool, project_dir=project)
     except McpManagerError as exc:
@@ -139,6 +141,7 @@ def map_servers(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """Show which tools/IDEs use which servers."""
+    track_command("map")
     try:
         servers = _discover(project_dir=project)
     except McpManagerError as exc:
@@ -196,6 +199,7 @@ def health(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """Health check all servers (status, latency, version)."""
+    track_command("health")
     try:
         servers = _discover(project_dir=project)
     except McpManagerError as exc:
@@ -256,6 +260,7 @@ def add(
     args: list[str] | None = typer.Option(None, "--arg", help="Args for stdio (repeatable)."),
 ) -> None:
     """Add a new MCP server to the mcp-manager registry."""
+    track_command("add")
     if command and url:
         console.print("[red]Specify --command (stdio) or --url (network), not both.[/red]")
         raise typer.Exit(1)
@@ -301,6 +306,7 @@ def remove(
     name: str = typer.Argument(..., help="Server name to remove."),
 ) -> None:
     """Remove a server from the mcp-manager registry."""
+    track_command("remove")
     reg = _get_registry()
     if reg.remove(name):
         reg.save()
@@ -323,6 +329,7 @@ def export_config(
     project: Path | None = typer.Option(None, "--project", "-p", help="Project dir."),
 ) -> None:
     """Export all discovered servers to a portable YAML/JSON file."""
+    track_command("export")
     try:
         servers = _discover(tool=tool, project_dir=project)
     except McpManagerError as exc:
@@ -348,6 +355,7 @@ def import_config(
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be imported."),
 ) -> None:
     """Import servers from a YAML/JSON file into the registry."""
+    track_command("import")
     try:
         servers = import_servers(input_file)
     except McpManagerError as exc:
@@ -383,6 +391,7 @@ def test_server(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """Test a specific server's capabilities via full protocol handshake."""
+    track_command("test")
     try:
         servers = _discover(project_dir=project)
     except McpManagerError as exc:
@@ -442,6 +451,7 @@ def test_server(
 @app.command()
 def status() -> None:
     """Show license status and available features."""
+    track_command("status")
     from mcp_manager.licensing import TIER_DEFINITIONS, get_license_info
 
     info = get_license_info()
@@ -458,3 +468,84 @@ def status() -> None:
 
     console.print(f"\n[bold]Features:[/bold] {', '.join(tier_config.features)}")
     console.print()
+
+
+# ---------------------------------------------------------------------------
+# stats (telemetry)
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def stats(
+    json: bool = typer.Option(False, "--json", help="Output as JSON."),
+) -> None:
+    """Show local usage telemetry (requires MCP_MANAGER_TELEMETRY=1)."""
+    from mcp_manager.telemetry import TelemetryStore, _telemetry_dir, is_enabled
+
+    track_command("stats")
+
+    if not is_enabled():
+        console.print(
+            "[dim]Telemetry is disabled. "
+            "Set MCP_MANAGER_TELEMETRY=1 to enable local usage tracking.[/dim]"
+        )
+        return
+
+    db_file = _telemetry_dir() / "telemetry.db"
+    if not db_file.exists():
+        console.print("[dim]No telemetry data yet.[/dim]")
+        return
+
+    ts = TelemetryStore(db_file)
+    try:
+        commands = ts.get_command_counts()
+        pro_gates = ts.get_pro_gate_counts()
+        total = ts.get_total_events()
+        first = ts.get_first_event_time()
+        last = ts.get_last_event_time()
+        activity = ts.get_daily_activity()
+
+        if json:
+            data = {
+                "total_events": total,
+                "first_event": first,
+                "last_event": last,
+                "commands": commands,
+                "pro_gate_hits": pro_gates,
+                "daily_activity": [{"date": d, "count": c} for d, c in activity],
+            }
+            console.print_json(json_mod.dumps(data, indent=2))
+        else:
+            overview = Table(title="Telemetry Overview")
+            overview.add_column("Metric", style="cyan")
+            overview.add_column("Value", style="green")
+            overview.add_row("Total Events", str(total))
+            overview.add_row("First Event", first or "n/a")
+            overview.add_row("Last Event", last or "n/a")
+            console.print(overview)
+
+            if commands:
+                cmd_table = Table(title="Command Usage")
+                cmd_table.add_column("Command", style="cyan")
+                cmd_table.add_column("Count", style="green", justify="right")
+                for name, count in commands.items():
+                    cmd_table.add_row(name, str(count))
+                console.print(cmd_table)
+
+            if pro_gates:
+                gate_table = Table(title="Pro Feature Gate Hits")
+                gate_table.add_column("Feature", style="cyan")
+                gate_table.add_column("Attempts", style="yellow", justify="right")
+                for name, count in pro_gates.items():
+                    gate_table.add_row(name, str(count))
+                console.print(gate_table)
+
+            if activity:
+                act_table = Table(title="Daily Activity (Last 7 Days)")
+                act_table.add_column("Date", style="cyan")
+                act_table.add_column("Events", style="green", justify="right")
+                for day, count in activity:
+                    act_table.add_row(day, str(count))
+                console.print(act_table)
+    finally:
+        ts.close()

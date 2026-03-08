@@ -21,6 +21,9 @@ def require_pro(feature: str) -> Callable[[F], F]:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             if not has_feature(feature):
+                from mcp_manager.telemetry import track_pro_gate
+
+                track_pro_gate(feature)
                 console = Console()
                 console.print(f"[yellow]{get_upgrade_message(feature)}[/yellow]")
                 raise typer.Exit(1)
