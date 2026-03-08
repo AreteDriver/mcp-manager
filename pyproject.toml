@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mcp-manager"
+name = "mcpmanager"
 version = "0.2.0"
 description = "Manage MCP servers across agentic IDEs"
 readme = "README.md"
