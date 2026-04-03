@@ -5,7 +5,7 @@ MCP server manager CLI — discovers, monitors, and manages MCP (Model Context P
 
 ## Quick Start
 ```bash
-cd /home/arete/projects/mcp-manager
+cd ./
 source .venv/bin/activate
 pip install -e ".[dev]"
 pytest tests/ -v
