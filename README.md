@@ -83,4 +83,6 @@ mcp-manager remove my-server
 
 ---
 
+[Discord](https://discord.gg/fdzQkrt8) — Join the community
+
 *Part of the [AreteDriver](https://github.com/AreteDriver) AI tooling ecosystem.*
