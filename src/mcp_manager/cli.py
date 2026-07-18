@@ -197,6 +197,7 @@ def health(
     timeout: int = typer.Option(10, "--timeout", help="Timeout per server in seconds."),
     project: Path | None = typer.Option(None, "--project", "-p", help="Project dir for .mcp.json."),
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
+    deep: bool = typer.Option(False, "--deep", help="Run deep checks (tools/list validation, dependency checks)."),
 ) -> None:
     """Health check all servers (status, latency, version)."""
     track_command("health")
@@ -213,7 +214,7 @@ def health(
         console.print("[dim]No MCP servers found.[/dim]")
         raise typer.Exit()
 
-    checker = HealthChecker(timeout=timeout)
+    checker = HealthChecker(timeout=timeout, deep=deep)
     results = asyncio.run(checker.check_all(servers))
 
     if json:
@@ -548,4 +549,116 @@ def stats(
                     act_table.add_row(day, str(count))
                 console.print(act_table)
     finally:
-        ts.close()
+        ts.close
+
+
+# ---------------------------------------------------------------------------
+# sync (config write-back)
+# ---------------------------------------------------------------------------
+
+
+@app.command(name="sync")
+def sync_servers(
+    ide: str = typer.Option(..., "--ide", "-i", help="IDE to sync configs to."),
+    project: Path | None = typer.Option(None, "--project", "-p", help="Project dir."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing."),
+    create: bool = typer.Option(False, "--create", help="Create config file if missing."),
+) -> None:
+    """Write discovered MCP servers to an IDE config file."""
+    from mcp_manager.writeback import ConfigWriteback
+
+    track_command("sync")
+    try:
+        servers = _discover(project_dir=project)
+    except McpManagerError as exc:
+        console.print(f"[red]Discovery error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    if not servers:
+        console.print("[dim]No MCP servers found to sync.[/dim]")
+        raise typer.Exit()
+
+    writeback = ConfigWriteback()
+
+    if dry_run:
+        preview = writeback.preview(ide, servers)
+        console.print_json(json_mod.dumps(preview, indent=2))
+        return
+
+    try:
+        path = writeback.write_servers(ide, servers, create_if_missing=create)
+        console.print(f"[green]Synced {len(servers)} server(s) to[/green] {path}")
+    except McpManagerError as exc:
+        console.print(f"[red]Sync error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+
+# ---------------------------------------------------------------------------
+# project (project-scoped config)
+# ---------------------------------------------------------------------------
+
+
+project_app = typer.Typer(help="Manage project-scoped MCP configurations.")
+app.add_typer(project_app, name="project")
+
+
+@project_app.command(name="init")
+def project_init(
+    name: str = typer.Option("my-project", "--name", "-n", help="Project name for the template."),
+    path: Path | None = typer.Option(None, "--path", "-p", help="Directory to create .mcp-manager.yml in."),
+) -> None:
+    """Scaffold a new .mcp-manager.yml in the target directory."""
+    from mcp_manager.project_config import init_project_config
+
+    try:
+        target = init_project_config(path, project_name=name)
+        console.print(f"[green]Created[/green] {target}")
+    except McpManagerError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+
+@project_app.command(name="validate")
+def project_validate(
+    path: Path | None = typer.Option(None, "--path", "-p", help="Path to .mcp-manager.yml or its directory."),
+) -> None:
+    """Validate a .mcp-manager.yml file."""
+    from mcp_manager.project_config import DEFAULT_FILENAME, validate_project_config
+
+    target = (path or Path.cwd())
+    if target.is_dir():
+        target = target / DEFAULT_FILENAME
+
+    errors = validate_project_config(target)
+    if errors:
+        console.print(f"[red]{len(errors)} error(s) found:[/red]")
+        for err in errors:
+            console.print(f"  • {err}")
+        raise typer.Exit(1)
+    else:
+        console.print(f"[green]{target} is valid.[/green]")
+
+
+@project_app.command(name="export")
+def project_export(
+    ide: str = typer.Option(..., "--ide", "-i", help="IDE to export to."),
+    path: Path | None = typer.Option(None, "--path", "-p", help="Path to .mcp-manager.yml or its directory."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing."),
+    create: bool = typer.Option(False, "--create", help="Create IDE config if missing."),
+) -> None:
+    """Export project config to an IDE config file."""
+    from mcp_manager.project_config import DEFAULT_FILENAME, export_to_ide
+
+    target = (path or Path.cwd())
+    if target.is_dir():
+        target = target / DEFAULT_FILENAME
+
+    try:
+        out_path = export_to_ide(target, ide, dry_run=dry_run, create=create)
+        if dry_run:
+            console.print(f"[dim]Dry-run: would export to[/dim] {out_path}")
+        else:
+            console.print(f"[green]Exported to[/green] {out_path}")
+    except McpManagerError as exc:
+        console.print(f"[red]Export error:[/red] {exc}")
+        raise typer.Exit(1) from exc

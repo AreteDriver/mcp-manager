@@ -27,3 +27,7 @@ class ExportError(McpManagerError):
 
 class LicenseError(McpManagerError):
     """Feature requires a higher license tier."""
+
+
+class WritebackError(McpManagerError):
+    """Config write-back to IDE files failed."""

@@ -34,8 +34,11 @@ mcp-manager list
 # Filter by IDE
 mcp-manager list --tool cursor
 
-# Health check all servers
+# Health check all servers (fast — process spawn / HTTP ping)
 mcp-manager health
+
+# Deep health check — validate dependencies on PATH and verify tools/list responds
+mcp-manager health --deep
 
 # Show server-to-IDE mapping
 mcp-manager map
@@ -47,6 +50,15 @@ mcp-manager import servers.yaml
 # Add/remove servers from the registry
 mcp-manager add my-server --command "node server.js"
 mcp-manager remove my-server
+
+# Sync project config to IDE (see Project-scoped Config below)
+mcp-manager sync --ide cursor --dry-run
+mcp-manager sync --ide cursor
+
+# Project-level MCP config
+mcp-manager project init              # Scaffold .mcp-manager.yml
+mcp-manager project validate          # Check env vars, commands on PATH
+mcp-manager project export --ide cursor
 ```
 
 ---
@@ -60,6 +72,27 @@ mcp-manager remove my-server
 | Cursor | `~/.cursor/mcp.json` |
 | Windsurf | `~/.windsurf/mcp_config.json` |
 | Project-level | `.mcp.json` (walks parent dirs) |
+
+---
+
+## Project-scoped Config
+
+Create `.mcp-manager.yml` in any repo root to share MCP server configs with your team:
+
+```yaml
+project: my-project
+servers:
+  local-docs:
+    command: node
+    args: ["./dist/index.js"]
+    env:
+      API_KEY: ${API_KEY}
+  remote-search:
+    type: sse
+    url: http://localhost:3000/sse
+```
+
+Environment variables (`${VAR}`) are resolved at load time. The config is validated before write-back (missing env vars or commands not on PATH are caught early).
 
 ---
 
@@ -78,7 +111,9 @@ mcp-manager remove my-server
 - [x] JSON registry with add/remove
 - [x] YAML/JSON export/import
 - [x] Protocol handshake testing
-- [ ] Config write-back (edit IDE configs directly)
+- [x] Config write-back (atomic, with backups)
+- [x] Project-scoped `.mcp-manager.yml` support
+- [x] Deep health checks (dependency validation + `tools/list` verification)
 - [ ] Server auto-restart on failure
 
 ---

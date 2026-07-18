@@ -9,10 +9,12 @@ import time
 import httpx
 
 from mcp_manager.config import HEALTH_STDIO_TIMEOUT_SECONDS, HEALTH_TIMEOUT_SECONDS
+from mcp_manager.deps import check_dependencies
 from mcp_manager.models import HealthResult, McpServer, ServerStatus, TransportType
 from mcp_manager.protocol import (
     build_initialize_request,
     build_initialized_notification,
+    build_list_tools_request,
     build_ping_request,
     extract_server_info,
     parse_jsonrpc_response,
@@ -24,24 +26,41 @@ logger = logging.getLogger(__name__)
 class HealthChecker:
     """Check health of MCP servers across transport types."""
 
-    def __init__(self, timeout: int | None = None) -> None:
+    def __init__(self, timeout: int | None = None, *, deep: bool = False) -> None:
         self._timeout = timeout or HEALTH_TIMEOUT_SECONDS
+        self._deep = deep
 
     async def check(self, server: McpServer) -> HealthResult:
         """Route to the correct transport-specific check."""
-        try:
-            if server.transport == TransportType.STDIO:
-                return await self._check_stdio(server)
-            if server.transport == TransportType.SSE:
-                return await self._check_sse(server)
-            if server.transport == TransportType.HTTP:
-                return await self._check_http(server)
+        # Dependency check (fast, local).
+        missing_deps = check_dependencies(server)
+        if missing_deps:
             return HealthResult(
                 server_name=server.name,
                 status=ServerStatus.ERROR,
                 transport=server.transport,
-                error_message=f"Unknown transport: {server.transport}",
+                error_message=f"Missing dependencies: {', '.join(missing_deps)}",
             )
+
+        try:
+            if server.transport == TransportType.STDIO:
+                result = await self._check_stdio(server)
+            elif server.transport == TransportType.SSE:
+                result = await self._check_sse(server)
+            elif server.transport == TransportType.HTTP:
+                result = await self._check_http(server)
+            else:
+                return HealthResult(
+                    server_name=server.name,
+                    status=ServerStatus.ERROR,
+                    transport=server.transport,
+                    error_message=f"Unknown transport: {server.transport}",
+                )
+
+            if self._deep and result.status in (ServerStatus.HEALTHY, ServerStatus.DEGRADED):
+                result = await self._deep_check(server, result)
+
+            return result
         except Exception as exc:
             return HealthResult(
                 server_name=server.name,
@@ -54,6 +73,14 @@ class HealthChecker:
         """Check all servers concurrently."""
         tasks = [self.check(s) for s in servers]
         return list(await asyncio.gather(*tasks))
+
+    async def _deep_check(self, server: McpServer, prev: HealthResult) -> HealthResult:
+        """Run deep health checks: verify tools/list responds."""
+        if server.transport == TransportType.STDIO:
+            return await self._check_stdio_deep(server, prev)
+        if server.transport in (TransportType.SSE, TransportType.HTTP):
+            return await self._check_network_deep(server, prev)
+        return prev
 
     # ------------------------------------------------------------------
     # Transport-specific checks
@@ -292,3 +319,126 @@ class HealthChecker:
                 transport=TransportType.HTTP,
                 error_message="Reachable but invalid JSON-RPC response",
             )
+
+    # ------------------------------------------------------------------
+    # Deep checks
+    # ------------------------------------------------------------------
+
+    async def _check_stdio_deep(self, server: McpServer, prev: HealthResult) -> HealthResult:
+        """Spawn process and verify tools/list returns non-empty."""
+        if not server.stdio_config:
+            return prev
+
+        cfg = server.stdio_config
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                cfg.command,
+                *cfg.args,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=cfg.env if cfg.env else None,
+            )
+        except (FileNotFoundError, OSError):
+            return prev
+
+        try:
+            assert proc.stdin is not None
+            assert proc.stdout is not None
+
+            # Initialize.
+            proc.stdin.write(build_initialize_request())
+            await proc.stdin.drain()
+            await proc.stdout.readline()
+
+            # Initialized notification.
+            proc.stdin.write(build_initialized_notification())
+            await proc.stdin.drain()
+
+            # Request tools/list.
+            proc.stdin.write(build_list_tools_request())
+            await proc.stdin.drain()
+            tools_data = await proc.stdout.readline()
+
+            if not tools_data:
+                return HealthResult(
+                    server_name=server.name,
+                    status=ServerStatus.DEGRADED,
+                    transport=TransportType.STDIO,
+                    latency_ms=prev.latency_ms,
+                    error_message="No tools/list response",
+                )
+
+            try:
+                parsed = parse_jsonrpc_response(tools_data)
+                tools = parsed.get("result", {}).get("tools", [])
+                if not tools:
+                    return HealthResult(
+                        server_name=server.name,
+                        status=ServerStatus.DEGRADED,
+                        transport=TransportType.STDIO,
+                        latency_ms=prev.latency_ms,
+                        error_message="Server returned zero tools",
+                    )
+            except Exception:
+                return HealthResult(
+                    server_name=server.name,
+                    status=ServerStatus.DEGRADED,
+                    transport=TransportType.STDIO,
+                    latency_ms=prev.latency_ms,
+                    error_message="Invalid tools/list response",
+                )
+        finally:
+            try:
+                proc.kill()
+                await proc.wait()
+            except ProcessLookupError:
+                pass
+
+        return prev
+
+    async def _check_network_deep(self, server: McpServer, prev: HealthResult) -> HealthResult:
+        """POST tools/list to SSE/HTTP server and verify non-empty response."""
+        if not server.network_config:
+            return prev
+
+        url = server.network_config.url
+        headers = {"Content-Type": "application/json", **server.network_config.headers}
+        request = build_list_tools_request()
+
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.post(url, content=request, headers=headers)
+        except Exception:
+            return prev
+
+        if resp.status_code >= 400:
+            return HealthResult(
+                server_name=server.name,
+                status=ServerStatus.DEGRADED,
+                transport=server.transport,
+                latency_ms=prev.latency_ms,
+                error_message=f"tools/list returned HTTP {resp.status_code}",
+            )
+
+        try:
+            body = resp.json()
+            tools = body.get("result", {}).get("tools", [])
+            if not tools:
+                return HealthResult(
+                    server_name=server.name,
+                    status=ServerStatus.DEGRADED,
+                    transport=server.transport,
+                    latency_ms=prev.latency_ms,
+                    error_message="Server returned zero tools",
+                )
+        except Exception:
+            return HealthResult(
+                server_name=server.name,
+                status=ServerStatus.DEGRADED,
+                transport=server.transport,
+                latency_ms=prev.latency_ms,
+                error_message="Invalid tools/list response",
+            )
+
+        return prev
