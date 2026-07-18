@@ -1,0 +1,46 @@
+name: "MCP Manager Validate"
+description: "Validate .mcp-manager.yml project config and optionally run deep health checks"
+author: "AreteDriver"
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  path:
+    description: "Path to .mcp-manager.yml or its directory"
+    required: false
+    default: "."
+  strict:
+    description: "Run deep health checks on discovered servers (requires deps on runner)"
+    required: false
+    default: "false"
+  version:
+    description: "Version of arete-mcp to install (e.g. 0.2.0 or latest)"
+    required: false
+    default: "latest"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      with:
+        python-version: "3.12"
+
+    - name: Install arete-mcp
+      shell: bash
+      run: |
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          pip install arete-mcp
+        else
+          pip install "arete-mcp==${{ inputs.version }}"
+        fi
+
+    - name: Validate .mcp-manager.yml
+      shell: bash
+      run: |
+        FLAGS=""
+        if [ "${{ inputs.strict }}" = "true" ]; then
+          FLAGS="--strict"
+        fi
+        mcp-manager validate --path "${{ inputs.path }}" $FLAGS

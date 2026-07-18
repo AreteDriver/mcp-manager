@@ -596,6 +596,115 @@ def sync_servers(
 
 
 # ---------------------------------------------------------------------------
+# validate (CI gate)
+# ---------------------------------------------------------------------------
+
+
+@app.command(name="validate")
+def validate_ci(
+    path: Path | None = typer.Option(
+        None, "--path", "-p", help="Path to .mcp-manager.yml or its directory."
+    ),
+    strict: bool = typer.Option(
+        False, "--strict", help="Also run deep health checks on discovered servers."
+    ),
+) -> None:
+    """Validate .mcp-manager.yml (for CI gates)."""
+    from mcp_manager.project_config import DEFAULT_FILENAME, validate_project_config
+
+    track_command("validate")
+    target = path or Path.cwd()
+    if target.is_dir():
+        target = target / DEFAULT_FILENAME
+
+    if not target.exists():
+        console.print(f"[red]Config not found:[/red] {target}")
+        raise typer.Exit(1)
+
+    errors = validate_project_config(target)
+    if errors:
+        console.print(f"[red]{len(errors)} error(s) found:[/red]")
+        for err in errors:
+            console.print(f"  • {err}")
+        raise typer.Exit(1)
+
+    if strict:
+        from mcp_manager.health import HealthChecker
+        from mcp_manager.project_config import load_servers_from_config
+
+        servers = load_servers_from_config(target)
+        if servers:
+            checker = HealthChecker(deep=True)
+            results = asyncio.run(checker.check_all(servers))
+            failed = [r for r in results if r.status not in (ServerStatus.HEALTHY,)]
+            if failed:
+                console.print(f"[red]{len(failed)} server(s) failed deep health check:[/red]")
+                for r in failed:
+                    console.print(f"  • {r.server_name}: {r.error_message}")
+                raise typer.Exit(1)
+            console.print(f"[green]{len(results)} server(s) passed deep health check.[/green]")
+
+    console.print(f"[green]{target} is valid.[/green]")
+
+
+# ---------------------------------------------------------------------------
+# monitor (auto-restart)
+# ---------------------------------------------------------------------------
+
+
+@app.command(name="monitor")
+def monitor_servers(
+    project: Path | None = typer.Option(
+        None, "--project", "-p", help="Project dir for .mcp-manager.yml."
+    ),
+    restart_delay: float = typer.Option(
+        1.0, "--restart-delay", help="Base delay in seconds between restarts."
+    ),
+    json: bool = typer.Option(False, "--json", help="Output summary as JSON."),
+) -> None:
+    """Keep stdio MCP servers alive with auto-restart."""
+    from mcp_manager.monitor import ServerMonitor
+    from mcp_manager.project_config import DEFAULT_FILENAME, load_servers_from_config
+
+    track_command("monitor")
+    target = (project or Path.cwd()) / DEFAULT_FILENAME
+
+    if not target.exists():
+        console.print(f"[red]Config not found:[/red] {target}")
+        raise typer.Exit(1)
+
+    servers = load_servers_from_config(target)
+    stdio_servers = [s for s in servers if s.transport == TransportType.STDIO]
+
+    if not stdio_servers:
+        console.print("[dim]No stdio servers to monitor.[/dim]")
+        raise typer.Exit()
+
+    monitor = ServerMonitor(stdio_servers, restart_delay=restart_delay)
+    console.print(f"Monitoring {len(stdio_servers)} stdio server(s). Press Ctrl+C to stop.")
+
+    try:
+        summary = asyncio.run(monitor.run())
+    except KeyboardInterrupt:
+        raise typer.Exit() from None
+
+    if json:
+        console.print_json(json_mod.dumps(summary, indent=2))
+    else:
+        table = Table(title="Monitor Summary")
+        table.add_column("Server", style="cyan")
+        table.add_column("Restarts", style="yellow", justify="right")
+        table.add_column("Final Exit", style="red")
+        for name, data in summary.items():
+            table.add_row(
+                name,
+                str(data["restart_count"]),
+                str(data["final_exit_code"]) if data["final_exit_code"] is not None else "—",
+            )
+        console.print(table)
+
+
+# ---------------------------------------------------------------------------
 # project (project-scoped config)
 # ---------------------------------------------------------------------------
 

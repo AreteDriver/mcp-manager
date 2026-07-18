@@ -111,6 +111,29 @@ mcp-manager export servers.yaml
 mcp-manager import servers.yaml
 ```
 
+### 🖥️ Server Monitor (Auto-Restart)
+Keep stdio MCP servers alive in development:
+```bash
+mcp-manager monitor --project .
+```
+- Watches server processes and restarts on crash
+- Exponential backoff (1s → 2s → 4s ... max 30s)
+- Graceful shutdown on Ctrl+C / SIGTERM
+- JSON status output: `mcp-manager monitor --json`
+
+### 🔒 CI Gate / GitHub Action
+Validate `.mcp-manager.yml` on every PR:
+
+```yaml
+# .github/workflows/mcp-validate.yml
+- uses: AreteDriver/mcp-manager/.github/actions/mcp-manager-validate@main
+  with:
+    path: "."
+    strict: "false"
+```
+
+Catches missing env vars, broken commands, and (with `--strict`) failing servers before merge.
+
 ---
 
 ## Usage
@@ -147,6 +170,13 @@ mcp-manager sync --ide cursor
 mcp-manager project init              # Scaffold .mcp-manager.yml
 mcp-manager project validate          # Check env vars, commands on PATH
 mcp-manager project export --ide cursor
+
+# Keep stdio servers alive with auto-restart
+mcp-manager monitor                   # Foreground monitor, Ctrl+C to stop
+
+# CI gate — validate .mcp-manager.yml in CI
+mcp-manager validate                  # Fast validation
+mcp-manager validate --strict         # + deep health checks on all servers
 ```
 
 ---
@@ -181,7 +211,9 @@ mcp-manager project export --ide cursor
 - [x] Config write-back (atomic, with backups)
 - [x] Project-scoped `.mcp-manager.yml` support
 - [x] Deep health checks (dependency validation + `tools/list` verification)
-- [ ] Server auto-restart on failure
+- [x] Server auto-restart monitor
+- [x] CI gate (`mcp-manager validate` + GitHub Action)
+- [ ] Server marketplace / remote registry
 
 See [ROADMAP.md](ROADMAP.md) for what's next.
 

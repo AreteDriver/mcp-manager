@@ -57,14 +57,21 @@ servers:
 
 ---
 
-## v0.3.0 — "Team-Ready" (Future)
+## v0.3.0 — "Team-Ready" ✅ Shipped
 
 **Theme:** MCP at team/enterprise scale.
 
-- **Remote server registry** — Share vetted MCP servers across an organization (internal npm registry / GitHub packages integration)
-- **Secret injection** — Integrate with 1Password, Doppler, or HashiCorp Vault for `env` resolution
-- **Server marketplace** — Curated directory of MCP servers with quality scores (health pass rate, tool count, last updated)
-- **CI gate** — `mcp-manager validate` as a GitHub Action ensuring `.mcp-manager.yml` is valid before merge
+### ✅ Server Auto-Restart Monitor
+
+`mcp-manager monitor` keeps stdio servers alive with exponential backoff restart.
+
+### ✅ CI Gate / GitHub Action
+
+`mcp-manager validate` for fast config validation. Composite action published at `.github/actions/mcp-manager-validate`.
+
+### P5: Server Marketplace (Planned)
+
+Curated directory of MCP servers with quality scores (health pass rate, tool count, last updated).
 
 ---
 
@@ -79,13 +86,20 @@ servers:
 | Deep health checks | ✅ Complete | >95% true-positive | Unit tests |
 | PyPI package published | 🔄 Next | `arete-mcp` | PyPI listing |
 
-### v0.3.0 (Target)
+### v0.3.0 (Shipped)
+
+| Metric | Status | Target | Measurement |
+|--------|--------|--------|-------------|
+| Server auto-restart monitor | ✅ Complete | Foreground + exponential backoff | Unit tests |
+| CI gate GitHub Action | ✅ Complete | Composite action in repo | Workflow tests |
+| PyPI package published | 🔄 Next | `arete-mcp` | PyPI listing |
+
+### v0.4.0 (Target)
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
 | Project-scoped config adoption | 5+ real projects using `.mcp-manager.yml` | GitHub search for `.mcp-manager.yml` |
-| Server auto-restart | Stable daemon mode | Integration tests |
-| CI gate GitHub Action | Published to Marketplace | Action installs |
+| Server marketplace | Curated directory with quality scores | Community submissions |
 | PyPI downloads | 200+/mo | pypistats (deflated for bot noise) |
 
 ---
