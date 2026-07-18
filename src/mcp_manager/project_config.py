@@ -130,7 +130,7 @@ def validate_project_config(path: Path) -> list[str]:
         # Validate env vars
         env = config.get("env", {})
         if isinstance(env, dict):
-            for key, value in env.items():
+            for _key, value in env.items():
                 if isinstance(value, str) and value.startswith("$") and value[1:] not in os.environ:
                     errors.append(f"Server {name!r}: env var {value[1:]!r} is not set")
 

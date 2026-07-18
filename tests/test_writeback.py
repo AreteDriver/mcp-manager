@@ -11,7 +11,6 @@ from mcp_manager.exceptions import WritebackError
 from mcp_manager.models import McpServer, NetworkConfig, StdioConfig, TransportType
 from mcp_manager.writeback import ConfigWriteback
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -66,7 +65,9 @@ class TestPreview:
         with pytest.raises(WritebackError):
             writeback.preview("unknown-ide", [])
 
-    def test_preview_new_file(self, writeback: ConfigWriteback, sample_stdio_server: McpServer) -> None:
+    def test_preview_new_file(
+        self, writeback: ConfigWriteback, sample_stdio_server: McpServer
+    ) -> None:
         # claude-code config path is ~-based; expanduser makes it absolute.
         # We monkeypatch the internal dict in the test below instead.
         pass
@@ -78,7 +79,9 @@ class TestPreview:
 
 
 class TestWriteServersNewFile:
-    def test_create_new_file(self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer) -> None:
+    def test_create_new_file(
+        self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer
+    ) -> None:
         # Patch internal config path to a temp file.
         fake_path = tmp_path / "claude.json"
         writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
@@ -92,15 +95,21 @@ class TestWriteServersNewFile:
         assert data["mcpServers"]["test-stdio"]["command"] == "node"
         assert data["mcpServers"]["test-stdio"]["args"] == ["server.js"]
 
-    def test_dry_run_does_not_create(self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer) -> None:
+    def test_dry_run_does_not_create(
+        self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer
+    ) -> None:
         fake_path = tmp_path / "claude.json"
         writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
 
-        writeback.write_servers("claude-code", [sample_stdio_server], create_if_missing=True, dry_run=True)
+        writeback.write_servers(
+            "claude-code", [sample_stdio_server], create_if_missing=True, dry_run=True
+        )
 
         assert not fake_path.exists()
 
-    def test_missing_file_without_create_raises(self, tmp_path: Path, writeback: ConfigWriteback) -> None:
+    def test_missing_file_without_create_raises(
+        self, tmp_path: Path, writeback: ConfigWriteback
+    ) -> None:
         fake_path = tmp_path / "claude.json"
         writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
 
@@ -114,7 +123,9 @@ class TestWriteServersNewFile:
 
 
 class TestWriteServersExistingFile:
-    def test_merge_into_existing(self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer) -> None:
+    def test_merge_into_existing(
+        self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer
+    ) -> None:
         fake_path = tmp_path / "claude.json"
         fake_path.write_text(json.dumps({"mcpServers": {"existing": {"command": "old"}}}))
         writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
@@ -125,7 +136,9 @@ class TestWriteServersExistingFile:
         assert data["mcpServers"]["existing"]["command"] == "old"
         assert data["mcpServers"]["test-stdio"]["command"] == "node"
 
-    def test_replace_same_name(self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer) -> None:
+    def test_replace_same_name(
+        self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer
+    ) -> None:
         fake_path = tmp_path / "claude.json"
         fake_path.write_text(json.dumps({"mcpServers": {"test-stdio": {"command": "old"}}}))
         writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
@@ -135,7 +148,9 @@ class TestWriteServersExistingFile:
         data = json.loads(fake_path.read_text())
         assert data["mcpServers"]["test-stdio"]["command"] == "node"
 
-    def test_preserves_non_mcp_keys(self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer) -> None:
+    def test_preserves_non_mcp_keys(
+        self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer
+    ) -> None:
         fake_path = tmp_path / "claude.json"
         fake_path.write_text(json.dumps({"otherKey": 42, "mcpServers": {}}))
         writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
@@ -146,7 +161,9 @@ class TestWriteServersExistingFile:
         assert data["otherKey"] == 42
         assert "mcpServers" in data
 
-    def test_creates_backup(self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer) -> None:
+    def test_creates_backup(
+        self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer
+    ) -> None:
         fake_path = tmp_path / "claude.json"
         original = json.dumps({"mcpServers": {}})
         fake_path.write_text(original)

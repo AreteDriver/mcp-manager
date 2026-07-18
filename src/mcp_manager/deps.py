@@ -7,8 +7,7 @@ from __future__ import annotations
 
 import shutil
 
-from mcp_manager.models import McpServer, StdioConfig, TransportType
-
+from mcp_manager.models import McpServer, TransportType
 
 # Known command → binary mapping for dependency checking.
 # Keys are the first token of a command string; values are the binaries to verify.

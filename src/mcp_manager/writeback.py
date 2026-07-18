@@ -15,7 +15,7 @@ from typing import Any
 
 from mcp_manager.config import IDE_CONFIG_PATHS
 from mcp_manager.exceptions import WritebackError
-from mcp_manager.models import McpServer, NetworkConfig, StdioConfig, TransportType
+from mcp_manager.models import McpServer, TransportType
 
 logger = logging.getLogger(__name__)
 

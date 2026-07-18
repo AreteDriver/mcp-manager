@@ -67,7 +67,9 @@ class TestCheckDependencies:
         server = McpServer(
             name="npx-server",
             transport=TransportType.STDIO,
-            stdio_config=StdioConfig(command="npx", args=["-y", "@modelcontextprotocol/server-filesystem"]),
+            stdio_config=StdioConfig(
+                command="npx", args=["-y", "@modelcontextprotocol/server-filesystem"]
+            ),
         )
         assert check_dependencies(server) == []
 

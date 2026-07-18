@@ -197,7 +197,9 @@ def health(
     timeout: int = typer.Option(10, "--timeout", help="Timeout per server in seconds."),
     project: Path | None = typer.Option(None, "--project", "-p", help="Project dir for .mcp.json."),
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
-    deep: bool = typer.Option(False, "--deep", help="Run deep checks (tools/list validation, dependency checks)."),
+    deep: bool = typer.Option(
+        False, "--deep", help="Run deep checks (tools/list validation, dependency checks)."
+    ),
 ) -> None:
     """Health check all servers (status, latency, version)."""
     track_command("health")
@@ -549,7 +551,7 @@ def stats(
                     act_table.add_row(day, str(count))
                 console.print(act_table)
     finally:
-        ts.close
+        ts.close()
 
 
 # ---------------------------------------------------------------------------
@@ -605,7 +607,9 @@ app.add_typer(project_app, name="project")
 @project_app.command(name="init")
 def project_init(
     name: str = typer.Option("my-project", "--name", "-n", help="Project name for the template."),
-    path: Path | None = typer.Option(None, "--path", "-p", help="Directory to create .mcp-manager.yml in."),
+    path: Path | None = typer.Option(
+        None, "--path", "-p", help="Directory to create .mcp-manager.yml in."
+    ),
 ) -> None:
     """Scaffold a new .mcp-manager.yml in the target directory."""
     from mcp_manager.project_config import init_project_config
@@ -620,7 +624,9 @@ def project_init(
 
 @project_app.command(name="validate")
 def project_validate(
-    path: Path | None = typer.Option(None, "--path", "-p", help="Path to .mcp-manager.yml or its directory."),
+    path: Path | None = typer.Option(
+        None, "--path", "-p", help="Path to .mcp-manager.yml or its directory."
+    ),
 ) -> None:
     """Validate a .mcp-manager.yml file."""
     from mcp_manager.project_config import DEFAULT_FILENAME, validate_project_config
@@ -642,7 +648,9 @@ def project_validate(
 @project_app.command(name="export")
 def project_export(
     ide: str = typer.Option(..., "--ide", "-i", help="IDE to export to."),
-    path: Path | None = typer.Option(None, "--path", "-p", help="Path to .mcp-manager.yml or its directory."),
+    path: Path | None = typer.Option(
+        None, "--path", "-p", help="Path to .mcp-manager.yml or its directory."
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing."),
     create: bool = typer.Option(False, "--create", help="Create IDE config if missing."),
 ) -> None:
