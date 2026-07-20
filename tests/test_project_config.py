@@ -47,13 +47,15 @@ class TestParseProjectConfig:
     def test_parses_valid_file(self, tmp_path: Path) -> None:
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "local": {"command": "node", "args": ["index.js"]},
-                    "remote": {"type": "sse", "url": "http://localhost:3000/sse"},
-                },
-            })
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {"command": "node", "args": ["index.js"]},
+                        "remote": {"type": "sse", "url": "http://localhost:3000/sse"},
+                    },
+                }
+            )
         )
         data = parse_project_config(config)
         assert data["project"] == "my-project"
@@ -83,12 +85,14 @@ class TestValidateProjectConfig:
     def test_valid_config_no_errors(self, tmp_path: Path) -> None:
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "local": {"command": "python3", "args": ["server.py"]},
-                },
-            })
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {"command": "python3", "args": ["server.py"]},
+                    },
+                }
+            )
         )
         errors = validate_project_config(config)
         assert errors == []
@@ -96,12 +100,14 @@ class TestValidateProjectConfig:
     def test_missing_command_and_url(self, tmp_path: Path) -> None:
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "bad": {"args": []},
-                },
-            })
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "bad": {"args": []},
+                    },
+                }
+            )
         )
         errors = validate_project_config(config)
         assert any("missing 'command' or 'url'" in e for e in errors)
@@ -110,15 +116,17 @@ class TestValidateProjectConfig:
         monkeypatch.delenv("MISSING_VAR", raising=False)
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "local": {
-                        "command": "python3",
-                        "env": {"SECRET": "$MISSING_VAR"},
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {
+                            "command": "python3",
+                            "env": {"SECRET": "$MISSING_VAR"},
+                        },
                     },
-                },
-            })
+                }
+            )
         )
         errors = validate_project_config(config)
         assert any("MISSING_VAR" in e for e in errors)
@@ -127,15 +135,17 @@ class TestValidateProjectConfig:
         monkeypatch.setenv("PRESENT_VAR", "secret_value")
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "local": {
-                        "command": "python3",
-                        "env": {"SECRET": "$PRESENT_VAR"},
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {
+                            "command": "python3",
+                            "env": {"SECRET": "$PRESENT_VAR"},
+                        },
                     },
-                },
-            })
+                }
+            )
         )
         errors = validate_project_config(config)
         assert not any("PRESENT_VAR" in e for e in errors)
@@ -144,12 +154,14 @@ class TestValidateProjectConfig:
         monkeypatch.setattr("shutil.which", lambda _cmd: None)
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "local": {"command": "nonexistent_binary_xyz"},
-                },
-            })
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {"command": "nonexistent_binary_xyz"},
+                    },
+                }
+            )
         )
         errors = validate_project_config(config)
         assert any("nonexistent_binary_xyz" in e for e in errors)
@@ -161,16 +173,18 @@ class TestLoadServersFromConfig:
     def test_loads_stdio_server(self, tmp_path: Path) -> None:
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "local": {
-                        "command": "python3",
-                        "args": ["server.py"],
-                        "env": {"DEBUG": "1"},
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {
+                            "command": "python3",
+                            "args": ["server.py"],
+                            "env": {"DEBUG": "1"},
+                        },
                     },
-                },
-            })
+                }
+            )
         )
         servers = load_servers_from_config(config)
         assert len(servers) == 1
@@ -187,16 +201,18 @@ class TestLoadServersFromConfig:
     def test_loads_sse_server(self, tmp_path: Path) -> None:
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "remote": {
-                        "type": "sse",
-                        "url": "http://localhost:3000/sse",
-                        "headers": {"Authorization": "Bearer token"},
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "remote": {
+                            "type": "sse",
+                            "url": "http://localhost:3000/sse",
+                            "headers": {"Authorization": "Bearer token"},
+                        },
                     },
-                },
-            })
+                }
+            )
         )
         servers = load_servers_from_config(config)
         assert len(servers) == 1
@@ -210,13 +226,15 @@ class TestLoadServersFromConfig:
     def test_skips_invalid_servers(self, tmp_path: Path) -> None:
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "good": {"command": "python3"},
-                    "bad": "not a dict",
-                },
-            })
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "good": {"command": "python3"},
+                        "bad": "not a dict",
+                    },
+                }
+            )
         )
         servers = load_servers_from_config(config)
         assert len(servers) == 1
@@ -226,15 +244,17 @@ class TestLoadServersFromConfig:
         monkeypatch.setenv("DB_URL", "postgres://localhost/db")
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "local": {
-                        "command": "python3",
-                        "env": {"DATABASE_URL": "$DB_URL"},
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {
+                            "command": "python3",
+                            "env": {"DATABASE_URL": "$DB_URL"},
+                        },
                     },
-                },
-            })
+                }
+            )
         )
         servers = load_servers_from_config(config)
         assert servers[0].stdio_config is not None
@@ -244,15 +264,17 @@ class TestLoadServersFromConfig:
         monkeypatch.delenv("MISSING_VAR", raising=False)
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "local": {
-                        "command": "python3",
-                        "env": {"SECRET": "$MISSING_VAR"},
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {
+                            "command": "python3",
+                            "env": {"SECRET": "$MISSING_VAR"},
+                        },
                     },
-                },
-            })
+                }
+            )
         )
         servers = load_servers_from_config(config)
         assert servers[0].stdio_config is not None
@@ -265,12 +287,14 @@ class TestExportToIde:
     def test_dry_run(self, tmp_path: Path) -> None:
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "local": {"command": "python3", "args": ["server.py"]},
-                },
-            })
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {"command": "python3", "args": ["server.py"]},
+                    },
+                }
+            )
         )
         result = export_to_ide(config, "cursor", dry_run=True)
         assert result.exists() or str(result).endswith("mcp.json")
@@ -278,12 +302,14 @@ class TestExportToIde:
     def test_from_directory(self, tmp_path: Path) -> None:
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
-            yaml.dump({
-                "project": "my-project",
-                "servers": {
-                    "local": {"command": "python3", "args": ["server.py"]},
-                },
-            })
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {"command": "python3", "args": ["server.py"]},
+                    },
+                }
+            )
         )
         result = export_to_ide(tmp_path, "cursor", dry_run=True)
         assert "mcp.json" in str(result) or "cursor" in str(result).lower()

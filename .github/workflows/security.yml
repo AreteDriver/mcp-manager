@@ -21,7 +21,9 @@ jobs:
           python-version: '3.11'
 
       - name: Install security tools
-        run: pip install pip-audit bandit[toml]
+        run: |
+          pip install --upgrade "setuptools>=83.0.0"
+          pip install pip-audit bandit[toml]
 
       - name: Run pip-audit (CVE scan)
         run: |

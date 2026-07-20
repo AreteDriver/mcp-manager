@@ -740,7 +740,7 @@ def project_validate(
     """Validate a .mcp-manager.yml file."""
     from mcp_manager.project_config import DEFAULT_FILENAME, validate_project_config
 
-    target = (path or Path.cwd())
+    target = path or Path.cwd()
     if target.is_dir():
         target = target / DEFAULT_FILENAME
 
@@ -766,7 +766,7 @@ def project_export(
     """Export project config to an IDE config file."""
     from mcp_manager.project_config import DEFAULT_FILENAME, export_to_ide
 
-    target = (path or Path.cwd())
+    target = path or Path.cwd()
     if target.is_dir():
         target = target / DEFAULT_FILENAME
 
