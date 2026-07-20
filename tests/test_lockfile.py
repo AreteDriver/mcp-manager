@@ -231,6 +231,47 @@ def test_check_lockfile_extra_server_reported() -> None:
     assert "b" in errors[0]
 
 
+def test_check_lockfile_expected_error_not_failure() -> None:
+    """Non-npm servers with matching errors in lockfile are not failures."""
+    servers = [
+        McpServer(
+            name="docs",
+            transport=TransportType.STDIO,
+            stdio_config=StdioConfig(command="python3", args=["-m", "http.server"]),
+        ),
+    ]
+    lockfile = Lockfile(
+        version="1",
+        resolved_at=datetime.now(UTC).isoformat(),
+        servers={
+            "docs": LockfileEntry(error="Non-npm command: version not resolvable"),
+        },
+    )
+    errors = check_lockfile(servers, lockfile)
+    assert errors == []
+
+
+def test_check_lockfile_different_error_reported() -> None:
+    """Errors that differ between lockfile and current resolution are reported."""
+    servers = [
+        McpServer(
+            name="a",
+            transport=TransportType.STDIO,
+            stdio_config=StdioConfig(command="npx", args=["some-pkg"]),
+        ),
+    ]
+    lockfile = Lockfile(
+        version="1",
+        resolved_at=datetime.now(UTC).isoformat(),
+        servers={
+            "a": LockfileEntry(error="old error"),
+        },
+    )
+    errors = check_lockfile(servers, lockfile)
+    assert len(errors) == 1
+    assert "old error" in errors[0]
+
+
 # ---------------------------------------------------------------------------
 # write / read lockfile
 # ---------------------------------------------------------------------------

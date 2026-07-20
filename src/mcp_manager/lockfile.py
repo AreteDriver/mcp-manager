@@ -240,11 +240,16 @@ def check_lockfile(config_servers: list[McpServer], lockfile: Lockfile) -> list[
         if not entry:
             continue
 
+        current = resolve_server(server)
+
+        # Expected errors that persist (non-npm commands, etc.) are not failures.
+        if entry.error and current.error == entry.error:
+            continue
+
         if entry.error:
             errors.append(f"Server {server.name!r}: lockfile has error: {entry.error}")
             continue
 
-        current = resolve_server(server)
         if current.error:
             errors.append(f"Server {server.name!r}: resolution failed: {current.error}")
             continue

@@ -14,6 +14,10 @@ inputs:
     description: "Run deep health checks on discovered servers (requires deps on runner)"
     required: false
     default: "false"
+  lockfile-check:
+    description: "Run mcp-manager lock --check to validate version pinning"
+    required: false
+    default: "false"
   version:
     description: "Version of arete-mcp to install (e.g. 0.2.0 or latest). Set to 'local' to install from a checked-out repo."
     required: false
@@ -50,3 +54,9 @@ runs:
           FLAGS="--strict"
         fi
         mcp-manager validate --path "${{ inputs.path }}" $FLAGS
+
+    - name: Check lockfile
+      if: inputs.lockfile-check == 'true'
+      shell: bash
+      run: |
+        mcp-manager lock --check --path "${{ inputs.path }}"

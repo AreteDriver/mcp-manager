@@ -17,3 +17,4 @@ jobs:
           strict: "false"
           version: "local"
           package-path: "."
+          lockfile-check: "true"
