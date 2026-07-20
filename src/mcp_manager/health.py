@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
+from typing import Any
 
 import httpx
 
 from mcp_manager.config import HEALTH_TIMEOUT_SECONDS
 from mcp_manager.deps import check_dependencies
+from mcp_manager.exceptions import ProtocolError
 from mcp_manager.models import HealthResult, McpServer, ServerStatus, TransportType
 from mcp_manager.protocol import (
     build_initialize_request,
@@ -61,7 +64,15 @@ class HealthChecker:
                 result = await self._deep_check(server, result)
 
             return result
-        except Exception as exc:
+        except (
+            OSError,
+            TimeoutError,
+            ProtocolError,
+            httpx.HTTPError,
+            json.JSONDecodeError,
+            ValueError,
+            TypeError,
+        ) as exc:
             return HealthResult(
                 server_name=server.name,
                 status=ServerStatus.ERROR,
@@ -86,21 +97,15 @@ class HealthChecker:
     # Transport-specific checks
     # ------------------------------------------------------------------
 
-    async def _check_stdio(self, server: McpServer) -> HealthResult:
-        """Spawn process, send initialize + ping, measure latency."""
-        if not server.stdio_config:
-            return HealthResult(
-                server_name=server.name,
-                status=ServerStatus.ERROR,
-                transport=TransportType.STDIO,
-                error_message="No stdio config",
-            )
+    async def _stdio_spawn(self, server: McpServer) -> asyncio.subprocess.Process | HealthResult:
+        """Spawn a stdio subprocess for the given server.
 
+        Returns the Process on success, or a HealthResult on failure.
+        """
+        assert server.stdio_config is not None
         cfg = server.stdio_config
-        start = time.monotonic()
-
         try:
-            proc = await asyncio.create_subprocess_exec(
+            return await asyncio.create_subprocess_exec(
                 cfg.command,
                 *cfg.args,
                 stdin=asyncio.subprocess.PIPE,
@@ -123,9 +128,60 @@ class HealthChecker:
                 error_message=str(exc),
             )
 
+    @staticmethod
+    async def _stdio_init_sequence(
+        proc: asyncio.subprocess.Process,
+    ) -> dict[str, Any] | None:
+        """Send initialize, read response, send initialized notification.
+
+        Returns server_info dict, or None if the process closed stdout.
+        """
+        assert proc.stdin is not None
+        assert proc.stdout is not None
+
+        proc.stdin.write(build_initialize_request())
+        await proc.stdin.drain()
+
+        init_data = await proc.stdout.readline()
+        if not init_data:
+            return None
+
+        init_response = parse_jsonrpc_response(init_data)
+        server_info = extract_server_info(init_response)
+
+        proc.stdin.write(build_initialized_notification())
+        await proc.stdin.drain()
+
+        return server_info
+
+    @staticmethod
+    async def _stdio_cleanup(proc: asyncio.subprocess.Process) -> None:
+        """Kill a stdio subprocess and wait for it to exit."""
+        try:
+            proc.kill()
+            await proc.wait()
+        except ProcessLookupError:
+            pass
+
+    async def _check_stdio(self, server: McpServer) -> HealthResult:
+        """Spawn process, send initialize + ping, measure latency."""
+        if not server.stdio_config:
+            return HealthResult(
+                server_name=server.name,
+                status=ServerStatus.ERROR,
+                transport=TransportType.STDIO,
+                error_message="No stdio config",
+            )
+
+        spawn_result = await self._stdio_spawn(server)
+        if isinstance(spawn_result, HealthResult):
+            return spawn_result
+        proc = spawn_result
+
+        start = time.monotonic()
         try:
             return await asyncio.wait_for(
-                self._stdio_handshake(server.name, proc, start),
+                self._stdio_ping_handshake(server.name, proc, start),
                 timeout=self._timeout,
             )
         except TimeoutError:
@@ -136,29 +192,17 @@ class HealthChecker:
                 error_message="Handshake timeout",
             )
         finally:
-            try:
-                proc.kill()
-                await proc.wait()
-            except ProcessLookupError:
-                pass
+            await self._stdio_cleanup(proc)
 
-    async def _stdio_handshake(
+    async def _stdio_ping_handshake(
         self,
         name: str,
         proc: asyncio.subprocess.Process,
         start: float,
     ) -> HealthResult:
         """Run the MCP initialize + ping handshake over stdio."""
-        assert proc.stdin is not None
-        assert proc.stdout is not None
-
-        # Send initialize.
-        proc.stdin.write(build_initialize_request())
-        await proc.stdin.drain()
-
-        # Read response.
-        init_data = await proc.stdout.readline()
-        if not init_data:
+        server_info = await self._stdio_init_sequence(proc)
+        if server_info is None:
             return HealthResult(
                 server_name=name,
                 status=ServerStatus.ERROR,
@@ -166,18 +210,12 @@ class HealthChecker:
                 error_message="No response to initialize",
             )
 
-        init_response = parse_jsonrpc_response(init_data)
-        server_info = extract_server_info(init_response)
-
-        # Send initialized notification.
-        proc.stdin.write(build_initialized_notification())
-        await proc.stdin.drain()
-
-        # Send ping.
+        assert proc.stdin is not None
         proc.stdin.write(build_ping_request())
         await proc.stdin.drain()
 
         # Read ping response.
+        assert proc.stdout is not None
         await proc.stdout.readline()
 
         latency = (time.monotonic() - start) * 1000
@@ -311,7 +349,7 @@ class HealthChecker:
                 protocol_version=server_info.get("protocol_version"),
                 server_info=server_info,
             )
-        except Exception:
+        except (json.JSONDecodeError, KeyError, TypeError):
             return HealthResult(
                 server_name=server.name,
                 status=ServerStatus.DEGRADED,
@@ -329,33 +367,25 @@ class HealthChecker:
         if not server.stdio_config:
             return prev
 
-        cfg = server.stdio_config
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                cfg.command,
-                *cfg.args,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=cfg.env if cfg.env else None,
-            )
-        except (FileNotFoundError, OSError):
+        spawn_result = await self._stdio_spawn(server)
+        if isinstance(spawn_result, HealthResult):
             return prev
+        proc = spawn_result
 
-        async def _deep_handshake() -> HealthResult:
+        async def _deep_tools_check() -> HealthResult:
+            server_info = await self._stdio_init_sequence(proc)
+            if server_info is None:
+                return HealthResult(
+                    server_name=server.name,
+                    status=ServerStatus.DEGRADED,
+                    transport=TransportType.STDIO,
+                    latency_ms=prev.latency_ms,
+                    error_message="No response to initialize",
+                )
+
             assert proc.stdin is not None
             assert proc.stdout is not None
 
-            # Initialize.
-            proc.stdin.write(build_initialize_request())
-            await proc.stdin.drain()
-            await proc.stdout.readline()
-
-            # Initialized notification.
-            proc.stdin.write(build_initialized_notification())
-            await proc.stdin.drain()
-
-            # Request tools/list.
             proc.stdin.write(build_list_tools_request())
             await proc.stdin.drain()
             tools_data = await proc.stdout.readline()
@@ -380,7 +410,7 @@ class HealthChecker:
                         latency_ms=prev.latency_ms,
                         error_message="Server returned zero tools",
                     )
-            except Exception:
+            except (ProtocolError, KeyError, TypeError):
                 return HealthResult(
                     server_name=server.name,
                     status=ServerStatus.DEGRADED,
@@ -392,7 +422,7 @@ class HealthChecker:
             return prev
 
         try:
-            return await asyncio.wait_for(_deep_handshake(), timeout=self._timeout)
+            return await asyncio.wait_for(_deep_tools_check(), timeout=self._timeout)
         except TimeoutError:
             return HealthResult(
                 server_name=server.name,
@@ -402,11 +432,7 @@ class HealthChecker:
                 error_message="Deep check timeout",
             )
         finally:
-            try:
-                proc.kill()
-                await proc.wait()
-            except ProcessLookupError:
-                pass
+            await self._stdio_cleanup(proc)
 
     async def _check_network_deep(self, server: McpServer, prev: HealthResult) -> HealthResult:
         """POST tools/list to SSE/HTTP server and verify non-empty response."""
@@ -420,7 +446,7 @@ class HealthChecker:
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.post(url, content=request, headers=headers)
-        except Exception:
+        except httpx.HTTPError:
             return prev
 
         if resp.status_code >= 400:
@@ -443,7 +469,7 @@ class HealthChecker:
                     latency_ms=prev.latency_ms,
                     error_message="Server returned zero tools",
                 )
-        except Exception:
+        except (json.JSONDecodeError, KeyError, TypeError):
             return HealthResult(
                 server_name=server.name,
                 status=ServerStatus.DEGRADED,

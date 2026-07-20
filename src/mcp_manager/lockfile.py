@@ -8,6 +8,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
 
 import yaml
 
@@ -171,7 +172,7 @@ def _fetch_npm_latest(package: str) -> str:
     try:
         with urllib.request.urlopen(url, timeout=10) as response:
             data = json.loads(response.read().decode("utf-8"))
-    except Exception as exc:
+    except (URLError, HTTPError, json.JSONDecodeError, TimeoutError) as exc:
         raise LockfileError(f"Failed to query npm registry for {package}: {exc}") from exc
 
     dist_tags: dict[str, str] = data.get("dist-tags", {})

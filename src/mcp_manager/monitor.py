@@ -160,7 +160,7 @@ class ServerMonitor:
                 break  # shutdown happened during sleep
             except TimeoutError:
                 delay = min(delay * BACKOFF_MULTIPLIER, self._max_restart_delay)
-            except Exception as exc:
+            except OSError as exc:
                 logger.exception("Error monitoring %s", name)
                 state.error_message = str(exc)
                 state.running = False

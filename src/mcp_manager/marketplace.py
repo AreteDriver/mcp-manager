@@ -199,7 +199,7 @@ def load_index(path: Path | None = None) -> MarketplaceIndex:
 
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except Exception as exc:
+    except (yaml.YAMLError, OSError) as exc:
         raise MarketplaceError(f"Failed to parse marketplace index: {exc}") from exc
 
     if not isinstance(raw, dict):
@@ -243,7 +243,7 @@ def _read_project_config(path: Path) -> dict[str, Any]:
 
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except Exception as exc:
+    except (yaml.YAMLError, OSError) as exc:
         raise MarketplaceError(f"Failed to read project config: {exc}") from exc
 
     if not isinstance(raw, dict):
@@ -352,7 +352,12 @@ def refresh_marketplace(
             else:
                 server.quality.health_pass_rate = 0.0
             server.quality.tool_count = result.server_info.get("tool_count", 0)
-        except Exception:
+        except (
+            OSError,
+            TimeoutError,
+            ValueError,
+            TypeError,
+        ):
             server.quality.health_pass_rate = 0.0
             server.quality.tool_count = 0
 

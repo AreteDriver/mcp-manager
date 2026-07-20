@@ -7,6 +7,8 @@ import logging
 import time
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from mcp_manager.config import MANAGER_REGISTRY_FILE
 from mcp_manager.exceptions import RegistryError
 from mcp_manager.models import HealthResult, McpServer, RegistryEntry
@@ -37,7 +39,7 @@ class ServerRegistry:
         for name, entry_data in raw.items():
             try:
                 self._entries[name] = RegistryEntry.model_validate(entry_data)
-            except Exception as exc:
+            except (ValidationError, TypeError, KeyError) as exc:
                 logger.warning("Skipping invalid registry entry %r: %s", name, exc)
 
     def save(self) -> None:

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import ValidationError
 
 from mcp_manager.exceptions import ExportError
 from mcp_manager.models import McpServer, NetworkConfig, StdioConfig, TransportType
@@ -68,7 +69,7 @@ def import_servers(path: Path) -> list[McpServer]:
             continue
         try:
             results.append(_deserialize_server(name, config))
-        except Exception as exc:
+        except (ValidationError, KeyError, TypeError) as exc:
             logger.warning("Failed to import server %r: %s", name, exc)
 
     return results
