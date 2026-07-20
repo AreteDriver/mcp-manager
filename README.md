@@ -83,6 +83,24 @@ Reads MCP server configs from:
 - **Backups**: `.mcp-manager-backup` created before any modification
 - **Dry-run**: Preview changes without touching disk
 
+### 🏪 Server Marketplace
+Discover and install curated MCP servers without hunting through GitHub:
+
+```bash
+# Search for servers by name or category
+mcp-manager search filesystem
+mcp-manager search --category Database
+
+# View details before installing
+mcp-manager info postgres
+
+# Add a server to your project config (interactive env var prompts)
+mcp-manager install postgres
+mcp-manager install slack --no-prompt  # skip prompts, keep ${VAR} placeholders
+```
+
+Shipped with 6 official MCP reference servers. Verified servers are shown by default; use `--include-unverified` to browse the full catalog.
+
 ### 📁 Project-Scoped Configs
 Create `.mcp-manager.yml` in any repo root:
 
@@ -164,6 +182,11 @@ mcp-manager health --deep
 
 # Show server-to-IDE mapping
 mcp-manager map
+
+# Search and install from the marketplace
+mcp-manager search filesystem
+mcp-manager info postgres
+mcp-manager install postgres
 
 # Export/import configs (portable YAML/JSON)
 mcp-manager export servers.yaml
