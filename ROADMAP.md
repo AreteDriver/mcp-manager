@@ -1,7 +1,7 @@
 # MCP Manager Roadmap
 
-**Current version:** v0.2.0 — Project-scoped configs, atomic write-back, deep health checks
-**Target:** v0.3.0 — Server lifecycle management, CI gates, marketplace
+**Current version:** v0.3.0 — Server lifecycle management, CI gates, atomic write-back
+**Target:** v0.4.0 — Server marketplace, team adoption, PyPI growth
 
 ---
 
@@ -116,4 +116,4 @@ The team that makes MCP configs as portable as `docker-compose.yml` wins this la
 
 ---
 
-*Last updated: 2026-07-17*
+*Last updated: 2026-07-19*

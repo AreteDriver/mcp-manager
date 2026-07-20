@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from mcp_manager.config import MCP_CLIENT_NAME, MCP_CLIENT_VERSION, MCP_PROTOCOL_VERSION
 from mcp_manager.exceptions import ProtocolError
@@ -55,7 +56,7 @@ def build_list_tools_request(request_id: int = 3) -> bytes:
     return json.dumps(msg).encode("utf-8") + b"\n"
 
 
-def parse_jsonrpc_response(data: bytes) -> dict:
+def parse_jsonrpc_response(data: bytes) -> dict[str, Any]:
     """Parse a JSON-RPC response from raw bytes.
 
     Handles newline-delimited JSON (reads the first complete JSON object).
@@ -79,7 +80,7 @@ def parse_jsonrpc_response(data: bytes) -> dict:
     raise ProtocolError(f"No valid JSON-RPC response found in: {text[:200]}")
 
 
-def extract_server_info(init_response: dict) -> dict:
+def extract_server_info(init_response: dict[str, Any]) -> dict[str, Any]:
     """Extract server metadata from an ``initialize`` response."""
     result = init_response.get("result", {})
     if not isinstance(result, dict):

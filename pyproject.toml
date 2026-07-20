@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arete-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "Discover, health-check, and sync MCP servers across Claude Code, Cursor, Windsurf, and more. Git-native project configs with atomic IDE write-back."
 readme = "README.md"
 license = {text = "MIT"}
@@ -36,6 +36,7 @@ dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23.0",
     "mypy>=1.0",
+    "types-PyYAML>=6.0",
     "ruff>=0.1.0",
 ]
 

@@ -97,7 +97,7 @@ class TelemetryStore:
 
     def get_total_events(self) -> int:
         row = self._conn.execute("SELECT COUNT(*) as cnt FROM events").fetchone()
-        return row["cnt"]
+        return int(row["cnt"])
 
     def get_first_event_time(self) -> str | None:
         row = self._conn.execute("SELECT MIN(timestamp) as ts FROM events").fetchone()

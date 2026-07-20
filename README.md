@@ -4,6 +4,7 @@
 
 [![CI](https://github.com/AreteDriver/mcp-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/AreteDriver/mcp-manager/actions)
 [![CodeQL](https://github.com/AreteDriver/mcp-manager/actions/workflows/codeql.yml/badge.svg)](https://github.com/AreteDriver/mcp-manager/actions)
+[![Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen.svg)](https://github.com/AreteDriver/mcp-manager/actions)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PyPI](https://img.shields.io/badge/PyPI-arete--mcp-blue)](https://pypi.org/project/arete-mcp/)
@@ -227,10 +228,26 @@ cd mcp-manager
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pytest
 ```
 
-PRs welcome. Please run `ruff check .` and `pytest` before submitting.
+### Preflight Checklist (required before PR)
+
+```bash
+# 1. Linting & formatting
+ruff check .
+ruff format --check
+
+# 2. Type checking
+mypy src/mcp_manager
+
+# 3. Tests with coverage (must be ≥80%)
+pytest --cov=mcp_manager --cov-fail-under=80
+
+# 4. Security audit
+pip-audit
+```
+
+CI enforces all of the above. PRs that fail any gate will not merge.
 
 ---
 
