@@ -1,0 +1,133 @@
+---
+categories:
+  - name: Database
+    description: MCP servers for database interaction
+  - name: Filesystem
+    description: Secure filesystem access and file operations
+  - name: Git
+    description: Git repository management and GitHub integration
+  - name: Communication
+    description: Slack and messaging integrations
+  - name: Browser
+    description: Web browser automation and scraping
+
+servers:
+  - name: filesystem
+    display_name: Filesystem MCP
+    description: Secure filesystem access with configurable root directories
+    repository: https://github.com/modelcontextprotocol/server-filesystem
+    categories:
+      - Filesystem
+    install_spec:
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+      env:
+        FILESYSTEM_ROOTS: ${FILESYSTEM_ROOTS}
+    quality:
+      health_pass_rate: 0.0
+      tool_count: 0
+      last_updated: null
+      license: MIT
+      verified: false
+
+  - name: postgres
+    display_name: PostgreSQL MCP
+    description: Read-only PostgreSQL database interaction
+    repository: https://github.com/modelcontextprotocol/server-postgres
+    categories:
+      - Database
+    install_spec:
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-postgres"
+      env:
+        DATABASE_URL: ${DATABASE_URL}
+    quality:
+      health_pass_rate: 0.0
+      tool_count: 0
+      last_updated: null
+      license: MIT
+      verified: false
+
+  - name: sqlite
+    display_name: SQLite MCP
+    description: SQLite database operations and querying
+    repository: https://github.com/modelcontextprotocol/server-sqlite
+    categories:
+      - Database
+    install_spec:
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-sqlite"
+      env:
+        SQLITE_DB_PATH: ${SQLITE_DB_PATH}
+    quality:
+      health_pass_rate: 0.0
+      tool_count: 0
+      last_updated: null
+      license: MIT
+      verified: false
+
+  - name: github
+    display_name: GitHub MCP
+    description: GitHub repository management, issues, and pull requests
+    repository: https://github.com/modelcontextprotocol/server-github
+    categories:
+      - Git
+    install_spec:
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-github"
+      env:
+        GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN}
+    quality:
+      health_pass_rate: 0.0
+      tool_count: 0
+      last_updated: null
+      license: MIT
+      verified: false
+
+  - name: slack
+    display_name: Slack MCP
+    description: Slack workspace messaging and channel management
+    repository: https://github.com/modelcontextprotocol/server-slack
+    categories:
+      - Communication
+    install_spec:
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-slack"
+      env:
+        SLACK_TOKEN: ${SLACK_TOKEN}
+        SLACK_TEAM_ID: ${SLACK_TEAM_ID}
+    quality:
+      health_pass_rate: 0.0
+      tool_count: 0
+      last_updated: null
+      license: MIT
+      verified: false
+
+  - name: puppeteer
+    display_name: Puppeteer MCP
+    description: Web browser automation and page interaction via Puppeteer
+    repository: https://github.com/modelcontextprotocol/server-puppeteer
+    categories:
+      - Browser
+    install_spec:
+      command: npx
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-puppeteer"
+      env: {}
+    quality:
+      health_pass_rate: 0.0
+      tool_count: 0
+      last_updated: null
+      license: MIT
+      verified: false

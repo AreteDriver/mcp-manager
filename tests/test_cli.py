@@ -784,3 +784,126 @@ class TestLockCommand:
         result = runner.invoke(app, ["lock", "--path", str(tmp_path)])
         assert result.exit_code == 1
         assert "Config error" in result.output
+
+
+class TestSearchCommand:
+    """CLI tests for marketplace search."""
+
+    def test_search_no_results(self) -> None:
+        result = runner.invoke(app, ["search", "zzzznonexistent"])
+        assert result.exit_code == 0
+        assert "No marketplace servers found" in result.output
+
+    def test_search_finds_server(self) -> None:
+        result = runner.invoke(app, ["search", "filesystem", "--include-unverified"])
+        assert result.exit_code == 0
+        assert "Filesystem MCP" in result.output
+
+    def test_search_category_filter(self) -> None:
+        result = runner.invoke(
+            app, ["search", "", "--category", "Database", "--include-unverified"]
+        )
+        assert result.exit_code == 0
+        assert "PostgreSQL MCP" in result.output
+
+    def test_search_unverified_hidden(self) -> None:
+        result = runner.invoke(app, ["search", ""])
+        # Default hides unverified; official servers are unverified in seed data.
+        assert result.exit_code == 0
+        assert "No marketplace servers found" in result.output
+
+    def test_search_include_unverified(self) -> None:
+        result = runner.invoke(app, ["search", "", "--include-unverified"])
+        assert result.exit_code == 0
+        assert "Filesystem MCP" in result.output
+
+    def test_search_json(self) -> None:
+        result = runner.invoke(app, ["search", "filesystem", "--json", "--include-unverified"])
+        assert result.exit_code == 0
+        assert '"servers"' in result.output
+
+
+class TestInfoCommand:
+    """CLI tests for marketplace info."""
+
+    def test_info_found(self) -> None:
+        result = runner.invoke(app, ["info", "filesystem"])
+        assert result.exit_code == 0
+        assert "Filesystem MCP" in result.output
+        assert "Repository:" in result.output
+
+    def test_info_not_found(self) -> None:
+        result = runner.invoke(app, ["info", "zzzznonexistent"])
+        assert result.exit_code == 1
+        assert "Server not found" in result.output
+
+    def test_info_json(self) -> None:
+        result = runner.invoke(app, ["info", "filesystem", "--json"])
+        assert result.exit_code == 0
+        assert '"name": "filesystem"' in result.output
+
+
+class TestInstallCommand:
+    """CLI tests for marketplace install."""
+
+    def test_install_adds_to_config(self, tmp_path: Path) -> None:
+        result = runner.invoke(
+            app,
+            ["install", "puppeteer", "--path", str(tmp_path), "--no-prompt"],
+        )
+        assert result.exit_code == 0
+        assert "Added 'puppeteer'" in result.output
+        config = tmp_path / ".mcp-manager.yml"
+        assert config.exists()
+
+    def test_install_dry_run(self, tmp_path: Path) -> None:
+        result = runner.invoke(
+            app,
+            ["install", "puppeteer", "--path", str(tmp_path), "--dry-run", "--no-prompt"],
+        )
+        assert result.exit_code == 0
+        assert "Dry-run" in result.output
+        config = tmp_path / ".mcp-manager.yml"
+        assert not config.exists()
+
+    def test_install_duplicate_fails(self, tmp_path: Path) -> None:
+        runner.invoke(
+            app,
+            ["install", "puppeteer", "--path", str(tmp_path), "--no-prompt"],
+        )
+        result = runner.invoke(
+            app,
+            ["install", "puppeteer", "--path", str(tmp_path), "--no-prompt"],
+        )
+        assert result.exit_code == 1
+        assert "already exists" in result.output
+
+    def test_install_not_found(self, tmp_path: Path) -> None:
+        result = runner.invoke(
+            app,
+            ["install", "zzzznonexistent", "--path", str(tmp_path), "--no-prompt"],
+        )
+        assert result.exit_code == 1
+        assert "Server not found" in result.output
+
+    def test_install_prompts_for_env(self, tmp_path: Path) -> None:
+        result = runner.invoke(
+            app,
+            ["install", "postgres", "--path", str(tmp_path)],
+            input="postgres://test\n",
+        )
+        assert result.exit_code == 0
+        config = tmp_path / ".mcp-manager.yml"
+        assert config.exists()
+        import yaml
+
+        data = yaml.safe_load(config.read_text())
+        assert data["servers"]["postgres"]["env"]["DATABASE_URL"] == "postgres://test"
+
+    def test_install_no_prompt_warns(self, tmp_path: Path) -> None:
+        result = runner.invoke(
+            app,
+            ["install", "postgres", "--path", str(tmp_path), "--no-prompt"],
+        )
+        assert result.exit_code == 0
+        assert "Remember to set env vars" in result.output
