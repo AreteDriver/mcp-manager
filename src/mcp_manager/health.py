@@ -8,7 +8,7 @@ import time
 
 import httpx
 
-from mcp_manager.config import HEALTH_STDIO_TIMEOUT_SECONDS, HEALTH_TIMEOUT_SECONDS
+from mcp_manager.config import HEALTH_TIMEOUT_SECONDS
 from mcp_manager.deps import check_dependencies
 from mcp_manager.models import HealthResult, McpServer, ServerStatus, TransportType
 from mcp_manager.protocol import (
@@ -126,7 +126,7 @@ class HealthChecker:
         try:
             return await asyncio.wait_for(
                 self._stdio_handshake(server.name, proc, start),
-                timeout=HEALTH_STDIO_TIMEOUT_SECONDS,
+                timeout=self._timeout,
             )
         except TimeoutError:
             return HealthResult(
@@ -342,7 +342,7 @@ class HealthChecker:
         except (FileNotFoundError, OSError):
             return prev
 
-        try:
+        async def _deep_handshake() -> HealthResult:
             assert proc.stdin is not None
             assert proc.stdout is not None
 
@@ -388,14 +388,25 @@ class HealthChecker:
                     latency_ms=prev.latency_ms,
                     error_message="Invalid tools/list response",
                 )
+
+            return prev
+
+        try:
+            return await asyncio.wait_for(_deep_handshake(), timeout=self._timeout)
+        except TimeoutError:
+            return HealthResult(
+                server_name=server.name,
+                status=ServerStatus.DEGRADED,
+                transport=TransportType.STDIO,
+                latency_ms=prev.latency_ms,
+                error_message="Deep check timeout",
+            )
         finally:
             try:
                 proc.kill()
                 await proc.wait()
             except ProcessLookupError:
                 pass
-
-        return prev
 
     async def _check_network_deep(self, server: McpServer, prev: HealthResult) -> HealthResult:
         """POST tools/list to SSE/HTTP server and verify non-empty response."""

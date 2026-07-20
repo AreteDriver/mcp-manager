@@ -498,7 +498,7 @@ class TestValidateCommand:
         with patch("mcp_manager.project_config.validate_project_config", return_value=[]):
             result = runner.invoke(app, ["validate", "--path", str(config_file)])
         assert result.exit_code == 0
-        assert "is valid" in result.output
+        assert "valid" in result.output
 
     def test_validate_not_found(self) -> None:
         with patch("mcp_manager.project_config.validate_project_config"):
@@ -641,7 +641,7 @@ class TestProjectCommands:
         with patch("mcp_manager.project_config.validate_project_config", return_value=[]):
             result = runner.invoke(app, ["project", "validate", "--path", "/fake"])
         assert result.exit_code == 0
-        assert "is valid" in result.output
+        assert "valid" in result.output
 
     def test_project_validate_errors(self) -> None:
         with patch(

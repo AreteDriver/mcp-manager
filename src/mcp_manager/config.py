@@ -31,7 +31,6 @@ MANAGER_REGISTRY_FILE: Path = MANAGER_CONFIG_DIR / "registry.json"
 # Health check defaults.
 # ---------------------------------------------------------------------------
 HEALTH_TIMEOUT_SECONDS: int = 10
-HEALTH_STDIO_TIMEOUT_SECONDS: int = 15
 
 # ---------------------------------------------------------------------------
 # MCP protocol.

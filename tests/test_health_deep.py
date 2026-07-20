@@ -162,17 +162,14 @@ class TestHealthCheckerStdioEdgeCases:
 
     def test_stdio_timeout(self) -> None:
         """Stdio handshake times out."""
-        checker = HealthChecker(timeout=5)
+        checker = HealthChecker(timeout=1)
         server = _make_stdio()
 
         async def _slow_stdout() -> bytes:
             await asyncio.sleep(100)  # way longer than timeout
             return b""
 
-        with (
-            patch("mcp_manager.health.asyncio.create_subprocess_exec") as mock_exec,
-            patch("mcp_manager.health.HEALTH_STDIO_TIMEOUT_SECONDS", 1),
-        ):
+        with patch("mcp_manager.health.asyncio.create_subprocess_exec") as mock_exec:
             proc = MagicMock()
             proc.stdin = MagicMock()
             proc.stdin.drain = AsyncMock()
