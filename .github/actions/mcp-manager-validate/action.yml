@@ -15,9 +15,13 @@ inputs:
     required: false
     default: "false"
   version:
-    description: "Version of arete-mcp to install (e.g. 0.2.0 or latest)"
+    description: "Version of arete-mcp to install (e.g. 0.2.0 or latest). Set to 'local' to install from a checked-out repo."
     required: false
     default: "latest"
+  package-path:
+    description: "Path to the arete-mcp source directory (used when version=local)"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -30,7 +34,9 @@ runs:
     - name: Install arete-mcp
       shell: bash
       run: |
-        if [ "${{ inputs.version }}" = "latest" ]; then
+        if [ "${{ inputs.version }}" = "local" ] && [ -n "${{ inputs.package-path }}" ]; then
+          pip install -e "${{ inputs.package-path }}"
+        elif [ "${{ inputs.version }}" = "latest" ]; then
           pip install arete-mcp
         else
           pip install "arete-mcp==${{ inputs.version }}"

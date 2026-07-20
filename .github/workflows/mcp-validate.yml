@@ -15,3 +15,5 @@ jobs:
         with:
           path: "."
           strict: "false"
+          version: "local"
+          package-path: "."
