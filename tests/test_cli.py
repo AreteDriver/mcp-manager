@@ -56,13 +56,13 @@ class TestNoArgs:
 
 class TestListCommand:
     def test_list_no_servers(self) -> None:
-        with patch("mcp_manager.cli._discover", return_value=[]):
+        with patch("mcp_manager.commands.servers._discover", return_value=[]):
             result = runner.invoke(app, ["list"])
         assert result.exit_code == 0
         assert "No MCP servers found" in result.output
 
     def test_list_shows_table(self) -> None:
-        with patch("mcp_manager.cli._discover", return_value=_sample_servers()):
+        with patch("mcp_manager.commands.servers._discover", return_value=_sample_servers()):
             result = runner.invoke(app, ["list"])
         assert result.exit_code == 0
         assert "filesystem" in result.output
@@ -71,20 +71,20 @@ class TestListCommand:
         assert "cursor" in result.output
 
     def test_list_filter_transport(self) -> None:
-        with patch("mcp_manager.cli._discover", return_value=_sample_servers()):
+        with patch("mcp_manager.commands.servers._discover", return_value=_sample_servers()):
             result = runner.invoke(app, ["list", "--transport", "http"])
         assert result.exit_code == 0
         assert "slack" in result.output
         assert "filesystem" not in result.output
 
     def test_list_invalid_transport(self) -> None:
-        with patch("mcp_manager.cli._discover", return_value=_sample_servers()):
+        with patch("mcp_manager.commands.servers._discover", return_value=_sample_servers()):
             result = runner.invoke(app, ["list", "--transport", "invalid"])
         assert result.exit_code == 1
         assert "Unknown transport" in result.output
 
     def test_list_json_output(self) -> None:
-        with patch("mcp_manager.cli._discover", return_value=_sample_servers()):
+        with patch("mcp_manager.commands.servers._discover", return_value=_sample_servers()):
             result = runner.invoke(app, ["list", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -96,20 +96,20 @@ class TestListCommand:
 
 class TestMapCommand:
     def test_map_no_servers(self) -> None:
-        with patch("mcp_manager.cli._discover", return_value=[]):
+        with patch("mcp_manager.commands.servers._discover", return_value=[]):
             result = runner.invoke(app, ["map"])
         assert result.exit_code == 0
         assert "No MCP servers found" in result.output
 
     def test_map_shows_table(self) -> None:
-        with patch("mcp_manager.cli._discover", return_value=_sample_servers()):
+        with patch("mcp_manager.commands.servers._discover", return_value=_sample_servers()):
             result = runner.invoke(app, ["map"])
         assert result.exit_code == 0
         assert "filesystem" in result.output
         assert "slack" in result.output
 
     def test_map_json_output(self) -> None:
-        with patch("mcp_manager.cli._discover", return_value=_sample_servers()):
+        with patch("mcp_manager.commands.servers._discover", return_value=_sample_servers()):
             result = runner.invoke(app, ["map", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -118,7 +118,7 @@ class TestMapCommand:
 
 class TestHealthCommand:
     def test_health_no_servers(self) -> None:
-        with patch("mcp_manager.cli._discover", return_value=[]):
+        with patch("mcp_manager.commands.servers._discover", return_value=[]):
             result = runner.invoke(app, ["health"])
         assert result.exit_code == 0
         assert "No MCP servers found" in result.output
@@ -144,8 +144,8 @@ class TestHealthCommand:
             ),
         ]
         with (
-            patch("mcp_manager.cli._discover", return_value=servers),
-            patch("mcp_manager.cli.HealthChecker") as mock_cls,
+            patch("mcp_manager.commands.servers._discover", return_value=servers),
+            patch("mcp_manager.commands.servers.HealthChecker") as mock_cls,
         ):
             mock_cls.return_value.check_all = AsyncMock(return_value=results)
             result = runner.invoke(app, ["health"])
@@ -166,8 +166,8 @@ class TestHealthCommand:
             ),
         ]
         with (
-            patch("mcp_manager.cli._discover", return_value=servers),
-            patch("mcp_manager.cli.HealthChecker") as mock_cls,
+            patch("mcp_manager.commands.servers._discover", return_value=servers),
+            patch("mcp_manager.commands.servers.HealthChecker") as mock_cls,
         ):
             mock_cls.return_value.check_all = AsyncMock(return_value=results)
             result = runner.invoke(app, ["health", "--json"])
@@ -188,8 +188,8 @@ class TestHealthCommand:
             ),
         ]
         with (
-            patch("mcp_manager.cli._discover", return_value=servers),
-            patch("mcp_manager.cli.HealthChecker") as mock_cls,
+            patch("mcp_manager.commands.servers._discover", return_value=servers),
+            patch("mcp_manager.commands.servers.HealthChecker") as mock_cls,
         ):
             mock_cls.return_value.check_all = AsyncMock(return_value=results)
             result = runner.invoke(app, ["health", "--server", "filesystem"])
@@ -200,7 +200,7 @@ class TestHealthCommand:
     def test_health_discovery_error(self) -> None:
         from mcp_manager.exceptions import McpManagerError
 
-        with patch("mcp_manager.cli._discover", side_effect=McpManagerError("boom")):
+        with patch("mcp_manager.commands.servers._discover", side_effect=McpManagerError("boom")):
             result = runner.invoke(app, ["health"])
         assert result.exit_code == 1
         assert "Discovery error" in result.output
@@ -208,7 +208,7 @@ class TestHealthCommand:
 
 class TestAddCommand:
     def test_add_stdio_success(self) -> None:
-        mock_reg = patch("mcp_manager.cli._get_registry").start()
+        mock_reg = patch("mcp_manager.commands.servers._get_registry").start()
         mock_reg.return_value.add = lambda s: None
         mock_reg.return_value.save = lambda: None
         result = runner.invoke(app, ["add", "my-server", "--command", "node", "--arg", "server.js"])
@@ -218,7 +218,7 @@ class TestAddCommand:
         assert "stdio" in result.output
 
     def test_add_network_success(self) -> None:
-        mock_reg = patch("mcp_manager.cli._get_registry").start()
+        mock_reg = patch("mcp_manager.commands.servers._get_registry").start()
         mock_reg.return_value.add = lambda s: None
         mock_reg.return_value.save = lambda: None
         result = runner.invoke(app, ["add", "my-server", "--url", "http://localhost:3000"])
@@ -246,7 +246,7 @@ class TestAddCommand:
 
 class TestRemoveCommand:
     def test_remove_success(self) -> None:
-        mock_reg = patch("mcp_manager.cli._get_registry").start()
+        mock_reg = patch("mcp_manager.commands.servers._get_registry").start()
         mock_reg.return_value.remove = lambda name: True
         mock_reg.return_value.save = lambda: None
         result = runner.invoke(app, ["remove", "my-server"])
@@ -255,7 +255,7 @@ class TestRemoveCommand:
         assert "Removed" in result.output
 
     def test_remove_not_found(self) -> None:
-        mock_reg = patch("mcp_manager.cli._get_registry").start()
+        mock_reg = patch("mcp_manager.commands.servers._get_registry").start()
         mock_reg.return_value.remove = lambda name: False
         result = runner.invoke(app, ["remove", "my-server"])
         patch.stopall()
@@ -266,8 +266,8 @@ class TestRemoveCommand:
 class TestExportCommand:
     def test_export_success(self) -> None:
         with (
-            patch("mcp_manager.cli._discover", return_value=_sample_servers()),
-            patch("mcp_manager.cli.export_servers") as mock_export,
+            patch("mcp_manager.commands.servers._discover", return_value=_sample_servers()),
+            patch("mcp_manager.exporters.export_servers") as mock_export,
         ):
             result = runner.invoke(app, ["export", "/tmp/out.yml"])
         assert result.exit_code == 0
@@ -275,7 +275,7 @@ class TestExportCommand:
         mock_export.assert_called_once()
 
     def test_export_no_servers(self) -> None:
-        with patch("mcp_manager.cli._discover", return_value=[]):
+        with patch("mcp_manager.commands.servers._discover", return_value=[]):
             result = runner.invoke(app, ["export", "/tmp/out.yml"])
         assert result.exit_code == 0
         assert "No servers to export" in result.output
@@ -283,7 +283,7 @@ class TestExportCommand:
     def test_export_discovery_error(self) -> None:
         from mcp_manager.exceptions import McpManagerError
 
-        with patch("mcp_manager.cli._discover", side_effect=McpManagerError("boom")):
+        with patch("mcp_manager.commands.servers._discover", side_effect=McpManagerError("boom")):
             result = runner.invoke(app, ["export", "/tmp/out.yml"])
         assert result.exit_code == 1
         assert "Discovery error" in result.output
@@ -292,8 +292,8 @@ class TestExportCommand:
 class TestImportCommand:
     def test_import_success(self) -> None:
         servers = _sample_servers()
-        with patch("mcp_manager.cli.import_servers", return_value=servers):
-            mock_reg = patch("mcp_manager.cli._get_registry").start()
+        with patch("mcp_manager.exporters.import_servers", return_value=servers):
+            mock_reg = patch("mcp_manager.commands.servers._get_registry").start()
             mock_reg.return_value.add = lambda s: None
             mock_reg.return_value.save = lambda: None
             result = runner.invoke(app, ["import", "/tmp/in.yml"])
@@ -303,7 +303,7 @@ class TestImportCommand:
 
     def test_import_dry_run(self) -> None:
         servers = _sample_servers()
-        with patch("mcp_manager.cli.import_servers", return_value=servers):
+        with patch("mcp_manager.exporters.import_servers", return_value=servers):
             result = runner.invoke(app, ["import", "/tmp/in.yml", "--dry-run"])
         assert result.exit_code == 0
         assert "Would import 2 server" in result.output
@@ -311,7 +311,7 @@ class TestImportCommand:
     def test_import_error(self) -> None:
         from mcp_manager.exceptions import McpManagerError
 
-        with patch("mcp_manager.cli.import_servers", side_effect=McpManagerError("boom")):
+        with patch("mcp_manager.exporters.import_servers", side_effect=McpManagerError("boom")):
             result = runner.invoke(app, ["import", "/tmp/in.yml"])
         assert result.exit_code == 1
         assert "Import error" in result.output
@@ -319,7 +319,7 @@ class TestImportCommand:
 
 class TestTestCommand:
     def test_test_server_not_found(self) -> None:
-        with patch("mcp_manager.cli._discover", return_value=_sample_servers()):
+        with patch("mcp_manager.commands.servers._discover", return_value=_sample_servers()):
             result = runner.invoke(app, ["test", "missing"])
         assert result.exit_code == 1
         assert "Server not found" in result.output
@@ -341,8 +341,8 @@ class TestTestCommand:
             },
         )
         with (
-            patch("mcp_manager.cli._discover", return_value=servers),
-            patch("mcp_manager.cli.HealthChecker") as mock_cls,
+            patch("mcp_manager.commands.servers._discover", return_value=servers),
+            patch("mcp_manager.commands.servers.HealthChecker") as mock_cls,
         ):
             mock_cls.return_value.check = AsyncMock(return_value=result_obj)
             result = runner.invoke(app, ["test", "filesystem", "--json"])
@@ -361,8 +361,8 @@ class TestTestCommand:
             transport=TransportType.STDIO,
         )
         with (
-            patch("mcp_manager.cli._discover", return_value=servers),
-            patch("mcp_manager.cli.HealthChecker") as mock_cls,
+            patch("mcp_manager.commands.servers._discover", return_value=servers),
+            patch("mcp_manager.commands.servers.HealthChecker") as mock_cls,
         ):
             mock_cls.return_value.check = AsyncMock(return_value=result_obj)
             result = runner.invoke(app, ["test", "filesystem"])
@@ -410,7 +410,7 @@ class TestStatsCommand:
         db_file.unlink(missing_ok=True)
 
         with (
-            patch("mcp_manager.cli.track_command"),
+            patch("mcp_manager.commands.ops.track_command"),
             patch("mcp_manager.telemetry.is_enabled", return_value=True),
             patch("mcp_manager.telemetry._telemetry_dir", return_value=tmp_path),
         ):
@@ -431,7 +431,7 @@ class TestStatsCommand:
         mock_ts.get_daily_activity.return_value = [("2026-07-01", 5)]
 
         with (
-            patch("mcp_manager.cli.track_command"),
+            patch("mcp_manager.commands.ops.track_command"),
             patch("mcp_manager.telemetry.is_enabled", return_value=True),
             patch("mcp_manager.telemetry._telemetry_dir", return_value=tmp_path),
             patch("mcp_manager.telemetry.TelemetryStore", return_value=mock_ts),
@@ -454,7 +454,7 @@ class TestStatsCommand:
         mock_ts.get_daily_activity.return_value = []
 
         with (
-            patch("mcp_manager.cli.track_command"),
+            patch("mcp_manager.commands.ops.track_command"),
             patch("mcp_manager.telemetry.is_enabled", return_value=True),
             patch("mcp_manager.telemetry._telemetry_dir", return_value=tmp_path),
             patch("mcp_manager.telemetry.TelemetryStore", return_value=mock_ts),
@@ -468,7 +468,7 @@ class TestStatsCommand:
 class TestSyncCommand:
     def test_sync_dry_run(self) -> None:
         servers = _sample_servers()
-        with patch("mcp_manager.cli._discover", return_value=servers):
+        with patch("mcp_manager.commands.servers._discover", return_value=servers):
             mock_wb = MagicMock()
             mock_wb.preview.return_value = {"cursor": "preview"}
             with patch("mcp_manager.writeback.ConfigWriteback", return_value=mock_wb):
@@ -477,7 +477,7 @@ class TestSyncCommand:
         assert "cursor" in result.output
 
     def test_sync_no_servers(self) -> None:
-        with patch("mcp_manager.cli._discover", return_value=[]):
+        with patch("mcp_manager.commands.ops._discover", return_value=[]):
             result = runner.invoke(app, ["sync", "--ide", "cursor"])
         assert result.exit_code == 0
         assert "No MCP servers found" in result.output
@@ -485,7 +485,7 @@ class TestSyncCommand:
     def test_sync_discovery_error(self) -> None:
         from mcp_manager.exceptions import McpManagerError
 
-        with patch("mcp_manager.cli._discover", side_effect=McpManagerError("boom")):
+        with patch("mcp_manager.commands.ops._discover", side_effect=McpManagerError("boom")):
             result = runner.invoke(app, ["sync", "--ide", "cursor"])
         assert result.exit_code == 1
         assert "Discovery error" in result.output
@@ -534,7 +534,7 @@ class TestValidateCommand:
         with (
             patch("mcp_manager.project_config.validate_project_config", return_value=[]),
             patch("mcp_manager.project_config.load_servers_from_config", return_value=servers),
-            patch("mcp_manager.health.HealthChecker") as mock_cls,
+            patch("mcp_manager.commands.ops.HealthChecker") as mock_cls,
         ):
             mock_cls.return_value.check_all = AsyncMock(return_value=results)
             result = runner.invoke(app, ["validate", "--path", str(config_file), "--strict"])
@@ -559,7 +559,7 @@ class TestValidateCommand:
         with (
             patch("mcp_manager.project_config.validate_project_config", return_value=[]),
             patch("mcp_manager.project_config.load_servers_from_config", return_value=servers),
-            patch("mcp_manager.health.HealthChecker") as mock_cls,
+            patch("mcp_manager.commands.ops.HealthChecker") as mock_cls,
         ):
             mock_cls.return_value.check_all = AsyncMock(return_value=results)
             result = runner.invoke(app, ["validate", "--path", str(config_file), "--strict"])

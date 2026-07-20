@@ -358,3 +358,139 @@ def test_build_network_config_raises_for_stdio() -> None:
     srv = _make_server("alpha")
     with pytest.raises(MarketplaceError, match="not a network server"):
         srv.build_network_config()
+
+
+# ---------------------------------------------------------------------------
+# Error paths
+# ---------------------------------------------------------------------------
+
+
+def test_load_index_invalid_yaml(tmp_path: Path) -> None:
+    """Raises MarketplaceError on malformed YAML."""
+    index_file = tmp_path / "index.yaml"
+    index_file.write_text("{{bad yaml: [")
+    with pytest.raises(MarketplaceError, match="Failed to parse"):
+        load_index(index_file)
+
+
+def test_load_index_not_a_mapping(tmp_path: Path) -> None:
+    """Raises MarketplaceError when YAML root is not a dict."""
+    index_file = tmp_path / "index.yaml"
+    index_file.write_text("- list\n- not\n- mapping")
+    with pytest.raises(MarketplaceError, match="must be a YAML mapping"):
+        load_index(index_file)
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_refresh_health_check_failure(tmp_path: Path) -> None:
+    """refresh_marketplace records zero score when health check fails."""
+    index_file = tmp_path / "index.yaml"
+    index_file.write_text(
+        yaml.dump(
+            {
+                "categories": [],
+                "servers": [
+                    {
+                        "name": "test",
+                        "display_name": "Test",
+                        "description": "d",
+                        "repository": "https://github.com/a/b",
+                        "categories": [],
+                        "install_spec": {
+                            "command": "nonexistent_command_xyz_12345",
+                            "args": [],
+                            "env": {},
+                        },
+                        "quality": {
+                            "health_pass_rate": 1.0,
+                            "tool_count": 5,
+                            "last_updated": "2026-01-01",
+                            "license": "MIT",
+                            "verified": False,
+                        },
+                    }
+                ],
+            }
+        )
+    )
+
+    import asyncio
+
+    original_run = asyncio.run
+
+    def _mock_run(coro, *args: Any, **kwargs: Any) -> Any:
+        from mcp_manager.health import HealthChecker
+        # Actually run the coroutine so we hit the real failure path
+        # (command not found → spawn fails → score set to 0)
+        return original_run(coro, *args, **kwargs)
+
+    try:
+        asyncio.run = _mock_run
+        updated = refresh_marketplace(index_file, timeout=5)
+    finally:
+        asyncio.run = original_run
+
+    assert updated is True
+    restored = load_index(index_file)
+    server = restored.servers["test"]
+    assert server.quality.health_pass_rate == 0.0
+    assert server.quality.tool_count == 0
+    assert server.quality.last_updated is not None
+
+
+def test_refresh_dry_run_does_not_write(tmp_path: Path) -> None:
+    """dry_run=True returns True but does not modify the index file."""
+    index_file = tmp_path / "index.yaml"
+    original_text = yaml.dump(
+        {
+            "categories": [],
+            "servers": [
+                {
+                    "name": "test",
+                    "display_name": "Test",
+                    "description": "d",
+                    "repository": "https://github.com/a/b",
+                    "categories": [],
+                    "install_spec": {"command": "echo", "args": ["hello"], "env": {}},
+                    "quality": {
+                        "health_pass_rate": 0.0,
+                        "tool_count": 0,
+                        "last_updated": "2026-01-01",
+                        "license": "MIT",
+                        "verified": False,
+                    },
+                }
+            ],
+        }
+    )
+    index_file.write_text(original_text)
+
+    import asyncio
+    from unittest.mock import MagicMock
+
+    mock_result = MagicMock()
+    mock_result.status.name = "HEALTHY"
+    mock_result.server_info = {"tool_count": 7}
+
+    original_run = asyncio.run
+
+    def _mock_run(coro, *args: Any, **kwargs: Any) -> Any:
+        return mock_result
+
+    try:
+        asyncio.run = _mock_run
+        updated = refresh_marketplace(index_file, dry_run=True)
+    finally:
+        asyncio.run = original_run
+
+    assert updated is True
+    # File should be unchanged
+    assert index_file.read_text() == original_text
+
+
+def test_install_missing_env_no_interactive(tmp_path: Path) -> None:
+    """Installing with env placeholders but no interactive leaves literal values."""
+    srv = _make_server("alpha", env={"URL": "${DATABASE_URL}"})
+    config_path = install_to_project(srv, tmp_path, interactive=False)
+    data = yaml.safe_load(config_path.read_text())
+    assert data["servers"]["alpha"]["env"]["URL"] == "${DATABASE_URL}"

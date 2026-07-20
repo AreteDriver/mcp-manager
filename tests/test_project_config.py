@@ -11,6 +11,7 @@ from mcp_manager.exceptions import WritebackError
 from mcp_manager.models import McpServer, TransportType
 from mcp_manager.project_config import (
     DEFAULT_FILENAME,
+    _resolve_env_var,
     export_to_ide,
     init_project_config,
     load_servers_from_config,
@@ -149,6 +150,70 @@ class TestValidateProjectConfig:
         )
         errors = validate_project_config(config)
         assert not any("PRESENT_VAR" in e for e in errors)
+
+    def test_env_var_braced_resolved(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("BRACED_VAR", "braced_value")
+        config = tmp_path / DEFAULT_FILENAME
+        config.write_text(
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {
+                            "command": "python3",
+                            "env": {"SECRET": "${BRACED_VAR}"},
+                        },
+                    },
+                }
+            )
+        )
+        errors = validate_project_config(config)
+        assert errors == []
+        servers = load_servers_from_config(config)
+        assert servers[0].stdio_config is not None
+        assert servers[0].stdio_config.env == {"SECRET": "braced_value"}
+
+    def test_env_var_default_fallback(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("UNSET_VAR", raising=False)
+        config = tmp_path / DEFAULT_FILENAME
+        config.write_text(
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {
+                            "command": "python3",
+                            "env": {"SECRET": "${UNSET_VAR:-default_value}"},
+                        },
+                    },
+                }
+            )
+        )
+        errors = validate_project_config(config)
+        assert errors == []
+        servers = load_servers_from_config(config)
+        assert servers[0].stdio_config is not None
+        assert servers[0].stdio_config.env == {"SECRET": "default_value"}
+
+    def test_env_var_default_uses_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SET_VAR", "from_env")
+        config = tmp_path / DEFAULT_FILENAME
+        config.write_text(
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {
+                            "command": "python3",
+                            "env": {"SECRET": "${SET_VAR:-default_value}"},
+                        },
+                    },
+                }
+            )
+        )
+        servers = load_servers_from_config(config)
+        assert servers[0].stdio_config is not None
+        assert servers[0].stdio_config.env == {"SECRET": "from_env"}
 
     def test_command_not_on_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("shutil.which", lambda _cmd: None)
@@ -313,3 +378,39 @@ class TestExportToIde:
         )
         result = export_to_ide(tmp_path, "cursor", dry_run=True)
         assert "mcp.json" in str(result) or "cursor" in str(result).lower()
+
+
+class TestResolveEnvVar:
+    """Direct tests for _resolve_env_var helper."""
+
+    def test_simple_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SIMPLE", "val")
+        assert _resolve_env_var("$SIMPLE") == "val"
+
+    def test_simple_unset_returns_literal(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("MISSING", raising=False)
+        assert _resolve_env_var("$MISSING") == "$MISSING"
+
+    def test_braced_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("BRACED", "val")
+        assert _resolve_env_var("${BRACED}") == "val"
+
+    def test_default_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("UNSET", raising=False)
+        assert _resolve_env_var("${UNSET:-default}") == "default"
+
+    def test_default_uses_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SET", "env_val")
+        assert _resolve_env_var("${SET:-default}") == "env_val"
+
+    def test_required_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("REQ", raising=False)
+        with pytest.raises(WritebackError, match="Required env var 'REQ' is not set"):
+            _resolve_env_var("${REQ:?required}")
+
+    def test_required_uses_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("REQ", "env_val")
+        assert _resolve_env_var("${REQ:?required}") == "env_val"
+
+    def test_non_env_value_passes_through(self) -> None:
+        assert _resolve_env_var("plain_string") == "plain_string"

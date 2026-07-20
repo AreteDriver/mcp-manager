@@ -81,7 +81,9 @@ def test_resolve_server_npm_registry_failure() -> None:
         transport=TransportType.STDIO,
         stdio_config=StdioConfig(command="npx", args=["some-pkg"]),
     )
-    with patch("urllib.request.urlopen", side_effect=Exception("network down")):
+    from urllib.error import URLError
+
+    with patch("urllib.request.urlopen", side_effect=URLError("network down")):
         entry = resolve_server(server)
     assert entry.resolved_version is None
     assert entry.error is not None
