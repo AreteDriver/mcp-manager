@@ -419,7 +419,6 @@ def test_refresh_health_check_failure(tmp_path: Path) -> None:
     original_run = asyncio.run
 
     def _mock_run(coro, *args: Any, **kwargs: Any) -> Any:
-        from mcp_manager.health import HealthChecker
         # Actually run the coroutine so we hit the real failure path
         # (command not found → spawn fails → score set to 0)
         return original_run(coro, *args, **kwargs)
@@ -475,6 +474,8 @@ def test_refresh_dry_run_does_not_write(tmp_path: Path) -> None:
     original_run = asyncio.run
 
     def _mock_run(coro, *args: Any, **kwargs: Any) -> Any:
+        if hasattr(coro, "close"):
+            coro.close()
         return mock_result
 
     try:

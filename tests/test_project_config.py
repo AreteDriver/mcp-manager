@@ -173,7 +173,9 @@ class TestValidateProjectConfig:
         assert servers[0].stdio_config is not None
         assert servers[0].stdio_config.env == {"SECRET": "braced_value"}
 
-    def test_env_var_default_fallback(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_env_var_default_fallback(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("UNSET_VAR", raising=False)
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
@@ -195,7 +197,9 @@ class TestValidateProjectConfig:
         assert servers[0].stdio_config is not None
         assert servers[0].stdio_config.env == {"SECRET": "default_value"}
 
-    def test_env_var_default_uses_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_env_var_default_uses_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("SET_VAR", "from_env")
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
