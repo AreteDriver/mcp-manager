@@ -286,3 +286,75 @@ def test_refresh_updates_scores(tmp_path: Path) -> None:
     assert server.quality.health_pass_rate == 1.0
     assert server.quality.tool_count == 3
     assert server.quality.last_updated is not None
+
+
+# ---------------------------------------------------------------------------
+# network / SSE support
+# ---------------------------------------------------------------------------
+
+
+def test_network_server_properties() -> None:
+    """Network servers report correct transport type."""
+    srv = MarketplaceServer(
+        name="fetch",
+        display_name="Fetch",
+        description="HTTP fetch",
+        repository="https://github.com/a/b",
+        categories=["Network"],
+        install_spec={"type": "sse", "url": "http://localhost:3001/sse"},
+        quality=QualityScore(),
+    )
+    assert srv.is_network is True
+    assert srv.is_stdio is False
+
+
+def test_stdio_server_properties() -> None:
+    """stdio servers report correct transport type."""
+    srv = _make_server("alpha")
+    assert srv.is_stdio is True
+    assert srv.is_network is False
+
+
+def test_install_network_server(tmp_path: Path) -> None:
+    """Installing a network server writes type/url/headers."""
+    srv = MarketplaceServer(
+        name="fetch",
+        display_name="Fetch",
+        description="HTTP fetch",
+        repository="https://github.com/a/b",
+        categories=["Network"],
+        install_spec={
+            "type": "sse",
+            "url": "http://localhost:3001/sse",
+            "headers": {"Authorization": "Bearer token"},
+        },
+        quality=QualityScore(),
+    )
+    config_path = install_to_project(srv, tmp_path, interactive=False)
+    data = yaml.safe_load(config_path.read_text())
+    assert data["servers"]["fetch"]["type"] == "sse"
+    assert data["servers"]["fetch"]["url"] == "http://localhost:3001/sse"
+    assert data["servers"]["fetch"]["headers"]["Authorization"] == "Bearer token"
+
+
+def test_build_network_config() -> None:
+    """build_network_config returns correct dict."""
+    srv = MarketplaceServer(
+        name="fetch",
+        display_name="Fetch",
+        description="HTTP fetch",
+        repository="https://github.com/a/b",
+        categories=["Network"],
+        install_spec={"type": "http", "url": "http://api.example.com", "headers": {}},
+        quality=QualityScore(),
+    )
+    net = srv.build_network_config()
+    assert net["type"] == "http"
+    assert net["url"] == "http://api.example.com"
+
+
+def test_build_network_config_raises_for_stdio() -> None:
+    """build_network_config raises for stdio servers."""
+    srv = _make_server("alpha")
+    with pytest.raises(MarketplaceError, match="not a network server"):
+        srv.build_network_config()

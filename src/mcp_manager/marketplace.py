@@ -126,6 +126,27 @@ class MarketplaceServer:
             env=resolved_env,
         )
 
+    @property
+    def is_stdio(self) -> bool:
+        """Return True if this server uses stdio transport."""
+        return "command" in self.install_spec
+
+    @property
+    def is_network(self) -> bool:
+        """Return True if this server uses SSE/HTTP transport."""
+        return "url" in self.install_spec
+
+    def build_network_config(self) -> dict[str, Any]:
+        """Build network config dict from install_spec."""
+        if not self.is_network:
+            raise MarketplaceError(f"Server {self.name!r} is not a network server")
+        headers = self.install_spec.get("headers", {})
+        return {
+            "type": self.install_spec.get("type", "sse"),
+            "url": str(self.install_spec["url"]),
+            "headers": dict(headers),
+        }
+
 
 class MarketplaceIndex:
     """In-memory representation of the marketplace index."""
@@ -259,16 +280,28 @@ def install_to_project(
     if server.name in data.get("servers", {}):
         raise MarketplaceError(f"Server {server.name!r} already exists in {config_path}")
 
-    env_overrides: dict[str, str] = {}
-    if interactive:
-        env_overrides = _env_var_prompts(server)
+    if server.is_stdio:
+        env_overrides: dict[str, str] = {}
+        if interactive:
+            env_overrides = _env_var_prompts(server)
 
-    stdio = server.build_stdio_config(env_overrides)
-    data["servers"][server.name] = {
-        "command": stdio.command,
-        "args": stdio.args,
-        "env": stdio.env,
-    }
+        stdio = server.build_stdio_config(env_overrides)
+        data["servers"][server.name] = {
+            "command": stdio.command,
+            "args": stdio.args,
+            "env": stdio.env,
+        }
+    elif server.is_network:
+        net = server.build_network_config()
+        data["servers"][server.name] = {
+            "type": net["type"],
+            "url": net["url"],
+            "headers": net.get("headers", {}),
+        }
+    else:
+        raise MarketplaceError(
+            f"Server {server.name!r} install_spec must contain 'command' (stdio) or 'url' (network)"
+        )
 
     if dry_run:
         return config_path
@@ -286,6 +319,7 @@ def refresh_marketplace(
     index_path: Path,
     *,
     timeout: int = 30,
+    dry_run: bool = False,
 ) -> bool:
     """Run deep health checks on all marketplace servers and update scores.
 
@@ -325,7 +359,7 @@ def refresh_marketplace(
         server.quality.last_updated = datetime.now(UTC).isoformat()
         updated = True
 
-    if updated:
+    if updated and not dry_run:
         _write_index(index_path, index)
 
     return updated

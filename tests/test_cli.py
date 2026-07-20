@@ -907,3 +907,12 @@ class TestInstallCommand:
         )
         assert result.exit_code == 0
         assert "Remember to set env vars" in result.output
+
+    def test_install_with_lock(self, tmp_path: Path) -> None:
+        result = runner.invoke(
+            app,
+            ["install", "puppeteer", "--path", str(tmp_path), "--no-prompt", "--lock"],
+        )
+        assert result.exit_code == 0
+        assert "Added 'puppeteer'" in result.output
+        assert ".mcp-manager.lock" in result.output

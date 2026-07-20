@@ -988,6 +988,9 @@ def marketplace_install(
     ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing."),
     no_prompt: bool = typer.Option(False, "--no-prompt", help="Skip interactive env var prompts."),
+    lock: bool = typer.Option(
+        False, "--lock", help="Auto-generate .mcp-manager.lock after install."
+    ),
 ) -> None:
     """Install a marketplace server into .mcp-manager.yml."""
     from mcp_manager.marketplace import MarketplaceError, install_to_project, load_index
@@ -1027,6 +1030,19 @@ def marketplace_install(
         if placeholders and no_prompt:
             console.print(f"[yellow]Remember to set env vars:[/yellow] {', '.join(placeholders)}")
 
+        if lock:
+            from mcp_manager.lockfile import generate_lockfile, write_lockfile
+            from mcp_manager.project_config import load_servers_from_config
+
+            try:
+                servers = load_servers_from_config(config_path)
+                lockfile = generate_lockfile(servers)
+                lockfile_path = config_path.parent / ".mcp-manager.lock"
+                write_lockfile(lockfile_path, lockfile)
+                console.print(f"[green]Wrote lockfile:[/green] {lockfile_path}")
+            except Exception as exc:
+                console.print(f"[yellow]Lockfile warning:[/yellow] {exc}")
+
 
 @app.command(name="marketplace-refresh")
 def marketplace_refresh(
@@ -1034,18 +1050,21 @@ def marketplace_refresh(
         ..., "--output", "-o", help="Path to marketplace index.yaml to update."
     ),
     timeout: int = typer.Option(30, "--timeout", "-t", help="Health check timeout in seconds."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing."),
 ) -> None:
     """Refresh quality scores for all marketplace servers."""
     from mcp_manager.marketplace import MarketplaceError, refresh_marketplace
 
     track_command("marketplace-refresh")
     try:
-        updated = refresh_marketplace(output, timeout=timeout)
+        updated = refresh_marketplace(output, timeout=timeout, dry_run=dry_run)
     except MarketplaceError as exc:
         console.print(f"[red]Refresh error:[/red] {exc}")
         raise typer.Exit(1) from exc
 
-    if updated:
+    if dry_run:
+        console.print(f"[dim]Dry-run: would update marketplace scores in {output}.[/dim]")
+    elif updated:
         console.print(f"[green]Updated marketplace scores in {output}.[/green]")
     else:
         console.print("[dim]No changes to marketplace scores.[/dim]")

@@ -131,3 +131,21 @@ servers:
       last_updated: null
       license: MIT
       verified: false
+
+  - name: fetch
+    display_name: Fetch MCP
+    description: HTTP-fetch MCP server for web requests
+    repository: https://github.com/modelcontextprotocol/server-fetch
+    categories:
+      - Network
+    install_spec:
+      type: sse
+      url: http://localhost:3001/sse
+      headers:
+        Authorization: Bearer ${FETCH_API_KEY}
+    quality:
+      health_pass_rate: 0.0
+      tool_count: 0
+      last_updated: null
+      license: MIT
+      verified: false
