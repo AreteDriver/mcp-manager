@@ -1,9 +1,15 @@
-# MCP Manager project config for this repository
-# See README.md for full documentation
-project: mcp-manager
+# Python-focused MCP project template
+project: my-project
+
 servers:
-  docs:
-    command: python3
-    args: ["-m", "http.server", "8000"]
-    env:
-      PYTHONPATH: "src"
+  filesystem:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem"]
+    env: {}
+    tags: [core, filesystem]
+
+  git:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-git"]
+    env: {}
+    tags: [core, vcs]

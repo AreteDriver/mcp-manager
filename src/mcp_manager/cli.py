@@ -8,6 +8,7 @@ import typer
 
 from mcp_manager import __version__
 from mcp_manager.commands.common import console
+from mcp_manager.commands.init_wizard import init_wizard_impl
 from mcp_manager.commands.marketplace import (
     marketplace_info_impl,
     marketplace_install_impl,
@@ -33,6 +34,10 @@ from mcp_manager.commands.servers import (
     status_impl,
     test_server_impl,
 )
+from mcp_manager.commands.templates_cmd import (
+    template_list_impl,
+    template_use_impl,
+)
 from mcp_manager.exceptions import McpManagerError
 
 app = typer.Typer(
@@ -40,6 +45,10 @@ app = typer.Typer(
     help="Manage MCP servers across agentic IDEs.",
 )
 app.add_typer(project_app, name="project")
+
+# Template sub-typer
+template_app = typer.Typer(name="template", help="Project template commands.")
+app.add_typer(template_app, name="template")
 
 
 @app.callback(invoke_without_command=True)
@@ -60,6 +69,69 @@ def main(
     if ctx.invoked_subcommand is None:
         console.print(ctx.get_help())
         raise typer.Exit()
+
+
+@app.command(name="init")
+def init_wizard(
+    ide: str | None = typer.Option(
+        None, "--ide", "-i", help="IDE name (auto-detected if omitted)."
+    ),
+    template: str | None = typer.Option(
+        None, "--template", "-t", help="Template name (default: python)."
+    ),
+    import_existing: bool = typer.Option(
+        False, "--import-existing", help="Import servers from existing IDE config."
+    ),
+    project_name: str = typer.Option(
+        "my-project", "--project-name", help="Project name for the config."
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip confirmations and overwrite if needed."
+    ),
+) -> None:
+    """Onboarding wizard: scaffold .mcp-manager.yml for a new project."""
+    try:
+        init_wizard_impl(
+            ide=ide,
+            template=template,
+            import_existing=import_existing,
+            project_name=project_name,
+            yes=yes,
+        )
+    except McpManagerError:
+        raise typer.Exit(1) from None
+
+
+@template_app.command(name="list")
+def template_list() -> None:
+    """List available built-in project templates."""
+    template_list_impl()
+
+
+@template_app.command(name="use")
+def template_use(
+    name: str = typer.Argument(..., help="Template name (e.g. 'python', 'data')."),
+    project_dir: Path | None = typer.Option(
+        None, "--project-dir", "-p", help="Directory to create config in."
+    ),
+    project_name: str = typer.Option(
+        "my-project", "--project-name", help="Project name for the template."
+    ),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Overwrite existing config."
+    ),
+) -> None:
+    """Scaffold a .mcp-manager.yml from a built-in template."""
+    target_dir = project_dir or Path.cwd()
+    try:
+        template_use_impl(
+            name=name,
+            project_dir=target_dir,
+            project_name=project_name,
+            force=force,
+        )
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="list")
