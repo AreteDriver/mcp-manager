@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 
@@ -169,11 +169,17 @@ class TestHealthCheckerStdioEdgeCases:
             await asyncio.sleep(100)  # way longer than timeout
             return b""
 
-        with patch("mcp_manager.health.asyncio.create_subprocess_exec") as mock_exec:
-            proc = AsyncMock()
-            proc.stdin = AsyncMock()
-            proc.stdout = AsyncMock()
+        with (
+            patch("mcp_manager.health.asyncio.create_subprocess_exec") as mock_exec,
+            patch("mcp_manager.health.HEALTH_STDIO_TIMEOUT_SECONDS", 1),
+        ):
+            proc = MagicMock()
+            proc.stdin = MagicMock()
+            proc.stdin.drain = AsyncMock()
+            proc.stdout = MagicMock()
             proc.stdout.readline = AsyncMock(side_effect=_slow_stdout)
+            proc.kill = MagicMock()
+            proc.wait = AsyncMock()
             mock_exec.return_value = proc
 
             result = asyncio.run(checker.check(server))
@@ -187,11 +193,13 @@ class TestHealthCheckerStdioEdgeCases:
         server = _make_stdio()
 
         with patch("mcp_manager.health.asyncio.create_subprocess_exec") as mock_exec:
-            proc = AsyncMock()
-            proc.stdin = AsyncMock()
-            proc.stdin.write = lambda data: None
-            proc.stdout = AsyncMock()
+            proc = MagicMock()
+            proc.stdin = MagicMock()
+            proc.stdin.drain = AsyncMock()
+            proc.stdout = MagicMock()
             proc.stdout.readline = AsyncMock(return_value=b"")
+            proc.kill.return_value = None
+            proc.wait = AsyncMock()
             mock_exec.return_value = proc
 
             result = asyncio.run(checker.check(server))

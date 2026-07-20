@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from typer.testing import CliRunner
 
@@ -145,8 +145,9 @@ class TestHealthCommand:
         ]
         with (
             patch("mcp_manager.cli._discover", return_value=servers),
-            patch("mcp_manager.cli.asyncio.run", return_value=results),
+            patch("mcp_manager.cli.HealthChecker") as mock_cls,
         ):
+            mock_cls.return_value.check_all = AsyncMock(return_value=results)
             result = runner.invoke(app, ["health"])
         assert result.exit_code == 0
         assert "filesystem" in result.output
@@ -166,8 +167,9 @@ class TestHealthCommand:
         ]
         with (
             patch("mcp_manager.cli._discover", return_value=servers),
-            patch("mcp_manager.cli.asyncio.run", return_value=results),
+            patch("mcp_manager.cli.HealthChecker") as mock_cls,
         ):
+            mock_cls.return_value.check_all = AsyncMock(return_value=results)
             result = runner.invoke(app, ["health", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -187,8 +189,9 @@ class TestHealthCommand:
         ]
         with (
             patch("mcp_manager.cli._discover", return_value=servers),
-            patch("mcp_manager.cli.asyncio.run", return_value=results),
+            patch("mcp_manager.cli.HealthChecker") as mock_cls,
         ):
+            mock_cls.return_value.check_all = AsyncMock(return_value=results)
             result = runner.invoke(app, ["health", "--server", "filesystem"])
         assert result.exit_code == 0
         assert "filesystem" in result.output
@@ -339,8 +342,9 @@ class TestTestCommand:
         )
         with (
             patch("mcp_manager.cli._discover", return_value=servers),
-            patch("mcp_manager.cli.asyncio.run", return_value=result_obj),
+            patch("mcp_manager.cli.HealthChecker") as mock_cls,
         ):
+            mock_cls.return_value.check = AsyncMock(return_value=result_obj)
             result = runner.invoke(app, ["test", "filesystem", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -358,8 +362,9 @@ class TestTestCommand:
         )
         with (
             patch("mcp_manager.cli._discover", return_value=servers),
-            patch("mcp_manager.cli.asyncio.run", return_value=result_obj),
+            patch("mcp_manager.cli.HealthChecker") as mock_cls,
         ):
+            mock_cls.return_value.check = AsyncMock(return_value=result_obj)
             result = runner.invoke(app, ["test", "filesystem"])
         assert result.exit_code == 0
         assert "filesystem" in result.output
@@ -529,8 +534,9 @@ class TestValidateCommand:
         with (
             patch("mcp_manager.project_config.validate_project_config", return_value=[]),
             patch("mcp_manager.project_config.load_servers_from_config", return_value=servers),
-            patch("mcp_manager.cli.asyncio.run", return_value=results),
+            patch("mcp_manager.health.HealthChecker") as mock_cls,
         ):
+            mock_cls.return_value.check_all = AsyncMock(return_value=results)
             result = runner.invoke(app, ["validate", "--path", str(config_file), "--strict"])
         assert result.exit_code == 0
         assert "passed deep health check" in result.output
@@ -553,8 +559,9 @@ class TestValidateCommand:
         with (
             patch("mcp_manager.project_config.validate_project_config", return_value=[]),
             patch("mcp_manager.project_config.load_servers_from_config", return_value=servers),
-            patch("mcp_manager.cli.asyncio.run", return_value=results),
+            patch("mcp_manager.health.HealthChecker") as mock_cls,
         ):
+            mock_cls.return_value.check_all = AsyncMock(return_value=results)
             result = runner.invoke(app, ["validate", "--path", str(config_file), "--strict"])
         assert result.exit_code == 1
         assert "failed deep health check" in result.output
@@ -600,8 +607,9 @@ class TestMonitorCommand:
                 "mcp_manager.project_config.load_servers_from_config",
                 return_value=[stdio_server],
             ),
-            patch("mcp_manager.cli.asyncio.run", return_value=summary),
+            patch("mcp_manager.monitor.ServerMonitor") as mock_cls,
         ):
+            mock_cls.return_value.run = AsyncMock(return_value=summary)
             result = runner.invoke(app, ["monitor", "--project", str(tmp_path), "--json"])
         assert result.exit_code == 0
         assert '"restart_count": 0' in result.output
