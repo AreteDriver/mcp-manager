@@ -1,7 +1,7 @@
 # MCP Manager Roadmap
 
-**Current version:** v0.3.0 — Server lifecycle management, CI gates, atomic write-back
-**Target:** v0.4.0 — Server marketplace, team adoption, PyPI growth
+**Current version:** v0.4.0 — Server marketplace, version pinning, CI gates, atomic write-back
+**Target:** v0.5.0 — Team adoption, PyPI growth, marketplace quality scores
 
 ---
 
@@ -38,7 +38,7 @@ Deep health checks with dependency validation and `tools/list` verification.
 **Commands shipped:**
 - `mcp-manager health --deep`
 
-### P4: Version Pinning (Planned)
+### ✅ P4: Version Pinning / Lockfile
 
 **Problem:** `npx -y @some-org/mcp-server` runs the latest version. A breaking change in the server breaks every team member's IDE at a different time.
 
@@ -55,6 +55,8 @@ servers:
 `mcp-manager lock` → writes `.mcp-manager.lock` with resolved versions (like `package-lock.json`).
 `mcp-manager lock --check` → CI gate ensuring lockfile matches resolved versions.
 
+**Shipped:** v0.3.1
+
 ---
 
 ## v0.3.0 — "Team-Ready" ✅ Shipped
@@ -69,9 +71,16 @@ servers:
 
 `mcp-manager validate` for fast config validation. Composite action published at `.github/actions/mcp-manager-validate`.
 
-### P5: Server Marketplace (Planned)
+### ✅ P5: Server Marketplace
 
 Curated directory of MCP servers with quality scores (health pass rate, tool count, last updated).
+
+**Commands shipped:**
+- `mcp-manager search <query>` — search by name/description/category
+- `mcp-manager info <name>` — detailed server info
+- `mcp-manager install <name>` — add server to `.mcp-manager.yml`
+
+**Shipped:** v0.4.0
 
 ---
 
