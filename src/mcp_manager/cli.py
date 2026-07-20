@@ -1026,3 +1026,26 @@ def marketplace_install(
         placeholders = server._env_var_placeholders()
         if placeholders and no_prompt:
             console.print(f"[yellow]Remember to set env vars:[/yellow] {', '.join(placeholders)}")
+
+
+@app.command(name="marketplace-refresh")
+def marketplace_refresh(
+    output: Path = typer.Option(
+        ..., "--output", "-o", help="Path to marketplace index.yaml to update."
+    ),
+    timeout: int = typer.Option(30, "--timeout", "-t", help="Health check timeout in seconds."),
+) -> None:
+    """Refresh quality scores for all marketplace servers."""
+    from mcp_manager.marketplace import MarketplaceError, refresh_marketplace
+
+    track_command("marketplace-refresh")
+    try:
+        updated = refresh_marketplace(output, timeout=timeout)
+    except MarketplaceError as exc:
+        console.print(f"[red]Refresh error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    if updated:
+        console.print(f"[green]Updated marketplace scores in {output}.[/green]")
+    else:
+        console.print("[dim]No changes to marketplace scores.[/dim]")

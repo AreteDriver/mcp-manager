@@ -275,3 +275,70 @@ def install_to_project(
 
     _write_project_config(config_path, data)
     return config_path
+
+
+# ---------------------------------------------------------------------------
+# Refresh quality scores
+# ---------------------------------------------------------------------------
+
+
+def refresh_marketplace(
+    index_path: Path,
+    *,
+    timeout: int = 30,
+) -> bool:
+    """Run deep health checks on all marketplace servers and update scores.
+
+    Returns True if any scores were updated.
+    """
+    import asyncio
+    from datetime import UTC, datetime
+
+    from mcp_manager.health import HealthChecker
+    from mcp_manager.models import McpServer, TransportType
+
+    index = load_index(index_path)
+    updated = False
+
+    for server in index.servers.values():
+        stdio = server.build_stdio_config()
+        mcp_server = McpServer(
+            name=server.name,
+            transport=TransportType.STDIO,
+            stdio_config=stdio,
+        )
+
+        checker = HealthChecker(timeout=timeout)
+        try:
+            result = asyncio.run(checker._check_stdio(mcp_server))
+            if result.status.name == "HEALTHY":
+                server.quality.health_pass_rate = 1.0
+            elif result.status.name == "DEGRADED":
+                server.quality.health_pass_rate = 0.5
+            else:
+                server.quality.health_pass_rate = 0.0
+            server.quality.tool_count = result.server_info.get("tool_count", 0)
+        except Exception:
+            server.quality.health_pass_rate = 0.0
+            server.quality.tool_count = 0
+
+        server.quality.last_updated = datetime.now(UTC).isoformat()
+        updated = True
+
+    if updated:
+        _write_index(index_path, index)
+
+    return updated
+
+
+def _write_index(path: Path, index: MarketplaceIndex) -> None:
+    """Persist a MarketplaceIndex back to disk."""
+    data = {
+        "categories": index.categories,
+        "servers": [s.to_dict() for s in index.servers.values()],
+    }
+    try:
+        text = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        path.write_text(text, encoding="utf-8")
+    except OSError as exc:
+        raise MarketplaceError(f"Failed to write marketplace index: {exc}") from exc

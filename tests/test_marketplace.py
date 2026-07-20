@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -15,8 +16,9 @@ from mcp_manager.marketplace import (
     QualityScore,
     install_to_project,
     load_index,
+    refresh_marketplace,
 )
-from mcp_manager.models import StdioConfig
+from mcp_manager.models import StdioConfig, TransportType
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -218,3 +220,69 @@ def test_install_prompts_for_env_vars(tmp_path: Path) -> None:
         config_path = install_to_project(srv, tmp_path, interactive=True)
     data = yaml.safe_load(config_path.read_text())
     assert data["servers"]["alpha"]["env"]["URL"] == "postgres://test"
+
+
+# ---------------------------------------------------------------------------
+# refresh_marketplace
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_refresh_updates_scores(tmp_path: Path) -> None:
+    """refresh_marketplace updates quality scores and writes back."""
+    from mcp_manager.health import HealthResult
+    from mcp_manager.models import ServerStatus
+
+    index_file = tmp_path / "index.yaml"
+    index_file.write_text(
+        yaml.dump(
+            {
+                "categories": [],
+                "servers": [
+                    {
+                        "name": "test",
+                        "display_name": "Test",
+                        "description": "d",
+                        "repository": "https://github.com/a/b",
+                        "categories": [],
+                        "install_spec": {"command": "echo", "args": ["hello"], "env": {}},
+                        "quality": {
+                            "health_pass_rate": 0.0,
+                            "tool_count": 0,
+                            "last_updated": None,
+                            "license": "MIT",
+                            "verified": False,
+                        },
+                    }
+                ],
+            }
+        )
+    )
+
+    mock_result = HealthResult(
+        server_name="test",
+        status=ServerStatus.HEALTHY,
+        latency_ms=10.0,
+        transport=TransportType.STDIO,
+        server_info={"tool_count": 3},
+    )
+
+    import asyncio
+
+    original_run = asyncio.run
+
+    def _mock_run(coro, *args: Any, **kwargs: Any) -> Any:
+        return mock_result
+
+    try:
+        asyncio.run = _mock_run
+        updated = refresh_marketplace(index_file, timeout=5)
+    finally:
+        asyncio.run = original_run
+
+    assert updated is True
+    restored = load_index(index_file)
+    server = restored.servers["test"]
+    assert server.quality.health_pass_rate == 1.0
+    assert server.quality.tool_count == 3
+    assert server.quality.last_updated is not None

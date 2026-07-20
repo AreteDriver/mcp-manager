@@ -1,0 +1,46 @@
+name: Marketplace Refresh
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 6 AM UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Install Node.js (for npx-based MCP servers)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Refresh marketplace scores
+        run: |
+          mcp-manager marketplace-refresh \
+            --output marketplace/index.yaml \
+            --timeout 30
+
+      - name: Commit updated scores
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add marketplace/index.yaml
+          if git diff --cached --quiet; then
+            echo "No score changes to commit."
+          else
+            git commit -m "chore: refresh marketplace quality scores ($(date -u +%Y-%m-%d))"
+            git push
+          fi
