@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -348,6 +349,193 @@ class TestLoadServersFromConfig:
         servers = load_servers_from_config(config)
         assert servers[0].stdio_config is not None
         assert servers[0].stdio_config.env == {"SECRET": "$MISSING_VAR"}
+
+
+    def test_loads_tags(self, tmp_path: Path) -> None:
+        config = tmp_path / DEFAULT_FILENAME
+        config.write_text(
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {
+                            "command": "python3",
+                            "tags": ["backend", "database"],
+                        },
+                        "remote": {
+                            "type": "sse",
+                            "url": "http://localhost:3000/sse",
+                            "tags": ["frontend"],
+                        },
+                    },
+                }
+            )
+        )
+        servers = load_servers_from_config(config)
+        assert len(servers) == 2
+        by_name = {s.name: s for s in servers}
+        assert by_name["local"].tags == ["backend", "database"]
+        assert by_name["remote"].tags == ["frontend"]
+
+    def test_skips_none_tags(self, tmp_path: Path) -> None:
+        config = tmp_path / DEFAULT_FILENAME
+        config.write_text(
+            yaml.dump(
+                {
+                    "project": "my-project",
+                    "servers": {
+                        "local": {
+                            "command": "python3",
+                            "tags": ["backend", None, "database"],
+                        },
+                    },
+                }
+            )
+        )
+        servers = load_servers_from_config(config)
+        assert servers[0].tags == ["backend", "database"]
+
+
+class TestExtendsInheritance:
+    """Tests for ``extends:`` config inheritance."""
+
+    def test_local_file_extends(self, tmp_path: Path) -> None:
+        base = tmp_path / "base.yml"
+        base.write_text(
+            yaml.dump(
+                {
+                    "project": "base-project",
+                    "servers": {
+                        "shared": {"command": "node", "args": ["shared.js"]},
+                    },
+                }
+            )
+        )
+        project = tmp_path / DEFAULT_FILENAME
+        project.write_text(
+            yaml.dump(
+                {
+                    "extends": "base.yml",
+                    "project": "my-project",
+                    "servers": {
+                        "local": {"command": "python3", "args": ["local.py"]},
+                    },
+                }
+            )
+        )
+        data = parse_project_config(project)
+        assert data["project"] == "my-project"
+        assert "shared" in data["servers"]
+        assert "local" in data["servers"]
+
+    def test_project_overrides_base_server(self, tmp_path: Path) -> None:
+        base = tmp_path / "base.yml"
+        base.write_text(
+            yaml.dump(
+                {
+                    "servers": {
+                        "shared": {"command": "node"},
+                    },
+                }
+            )
+        )
+        project = tmp_path / DEFAULT_FILENAME
+        project.write_text(
+            yaml.dump(
+                {
+                    "extends": "base.yml",
+                    "servers": {
+                        "shared": {"command": "python3"},
+                    },
+                }
+            )
+        )
+        data = parse_project_config(project)
+        assert data["servers"]["shared"]["command"] == "python3"
+
+    def test_circular_extends_raises(self, tmp_path: Path) -> None:
+        a = tmp_path / "a.yml"
+        b = tmp_path / "b.yml"
+        a.write_text(yaml.dump({"extends": "b.yml", "servers": {}}))
+        b.write_text(yaml.dump({"extends": "a.yml", "servers": {}}))
+        with pytest.raises(WritebackError, match="Circular extends"):
+            parse_project_config(a)
+
+    def test_missing_extends_source_raises(self, tmp_path: Path) -> None:
+        project = tmp_path / DEFAULT_FILENAME
+        project.write_text(yaml.dump({"extends": "missing.yml", "servers": {}}))
+        with pytest.raises(WritebackError, match="Extends source not found"):
+            parse_project_config(project)
+
+    def test_file_scheme_extends(self, tmp_path: Path) -> None:
+        base = tmp_path / "base.yml"
+        base.write_text(yaml.dump({"servers": {"shared": {"command": "node"}}}))
+        project = tmp_path / DEFAULT_FILENAME
+        project.write_text(
+            yaml.dump({"extends": f"file://{base}", "servers": {}})
+        )
+        data = parse_project_config(project)
+        assert "shared" in data["servers"]
+
+    def test_github_to_raw_url(self) -> None:
+        from mcp_manager.project_config import _github_to_raw_url
+
+        url = _github_to_raw_url("github:AreteDriver/mcp-manager/base.yml@v0.4.0")
+        assert (
+            url
+            == "https://raw.githubusercontent.com/AreteDriver/mcp-manager/v0.4.0/base.yml"
+        )
+
+    def test_github_url_missing_ref_raises(self) -> None:
+        from mcp_manager.project_config import _github_to_raw_url
+
+        with pytest.raises(WritebackError, match="must include @ref"):
+            _github_to_raw_url("github:AreteDriver/mcp-manager/base.yml")
+
+    def test_remote_extends_mocked(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        def mock_get(url: str, **kwargs: Any) -> Any:
+            class Resp:
+                text = yaml.dump({"servers": {"remote": {"command": "curl"}}})
+                def raise_for_status(self) -> None: ...
+            return Resp()
+
+        monkeypatch.setattr("httpx.get", mock_get)
+        project = tmp_path / DEFAULT_FILENAME
+        project.write_text(
+            yaml.dump({"extends": "https://example.com/base.yml", "servers": {}})
+        )
+        data = parse_project_config(project)
+        assert "remote" in data["servers"]
+
+    def test_list_of_extends(self, tmp_path: Path) -> None:
+        base1 = tmp_path / "base1.yml"
+        base2 = tmp_path / "base2.yml"
+        base1.write_text(yaml.dump({"servers": {"a": {"command": "a"}}}))
+        base2.write_text(yaml.dump({"servers": {"b": {"command": "b"}}}))
+        project = tmp_path / DEFAULT_FILENAME
+        project.write_text(
+            yaml.dump({"extends": ["base1.yml", "base2.yml"], "servers": {}})
+        )
+        data = parse_project_config(project)
+        assert "a" in data["servers"]
+        assert "b" in data["servers"]
+
+    def test_extends_preserved_other_keys(self, tmp_path: Path) -> None:
+        base = tmp_path / "base.yml"
+        base.write_text(yaml.dump({"servers": {"s": {"command": "node"}}}))
+        project = tmp_path / DEFAULT_FILENAME
+        project.write_text(
+            yaml.dump(
+                {
+                    "extends": "base.yml",
+                    "project": "p",
+                    "servers": {},
+                    "custom_key": 123,
+                }
+            )
+        )
+        data = parse_project_config(project)
+        assert data["custom_key"] == 123
 
 
 class TestExportToIde:

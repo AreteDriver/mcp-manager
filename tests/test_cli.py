@@ -24,6 +24,7 @@ def _sample_servers() -> list[McpServer]:
             stdio_config=StdioConfig(command="npx", args=["-y", "server-fs"]),
             source_tool="claude-code",
             source_path=Path("/home/test/.claude.json"),
+            tags=["core", "filesystem"],
         ),
         McpServer(
             name="slack",
@@ -31,6 +32,7 @@ def _sample_servers() -> list[McpServer]:
             network_config=NetworkConfig(type="http", url="https://mcp.slack.com/mcp"),
             source_tool="cursor",
             source_path=Path("/home/test/.cursor/mcp.json"),
+            tags=["communication"],
         ),
     ]
 
@@ -92,6 +94,27 @@ class TestListCommand:
         assert len(data) == 2
         names = {s["name"] for s in data}
         assert names == {"filesystem", "slack"}
+
+    def test_list_filter_include_tag(self) -> None:
+        with patch("mcp_manager.commands.servers._discover", return_value=_sample_servers()):
+            result = runner.invoke(app, ["list", "--tag", "core"])
+        assert result.exit_code == 0
+        assert "filesystem" in result.output
+        assert "slack" not in result.output
+
+    def test_list_filter_exclude_tag(self) -> None:
+        with patch("mcp_manager.commands.servers._discover", return_value=_sample_servers()):
+            result = runner.invoke(app, ["list", "--exclude-tag", "core"])
+        assert result.exit_code == 0
+        assert "slack" in result.output
+        assert "filesystem" not in result.output
+
+    def test_list_filter_multiple_tags(self) -> None:
+        with patch("mcp_manager.commands.servers._discover", return_value=_sample_servers()):
+            result = runner.invoke(app, ["list", "--tag", "core", "--tag", "communication"])
+        assert result.exit_code == 0
+        assert "filesystem" in result.output
+        assert "slack" in result.output
 
 
 class TestMapCommand:
@@ -193,6 +216,28 @@ class TestHealthCommand:
         ):
             mock_cls.return_value.check_all = AsyncMock(return_value=results)
             result = runner.invoke(app, ["health", "--server", "filesystem"])
+        assert result.exit_code == 0
+        assert "filesystem" in result.output
+        assert "slack" not in result.output
+
+    def test_health_filter_include_tag(self) -> None:
+        from mcp_manager.models import HealthResult, ServerStatus
+
+        servers = _sample_servers()
+        results = [
+            HealthResult(
+                server_name="filesystem",
+                status=ServerStatus.HEALTHY,
+                latency_ms=12.0,
+                transport=TransportType.STDIO,
+            ),
+        ]
+        with (
+            patch("mcp_manager.commands.servers._discover", return_value=servers),
+            patch("mcp_manager.commands.servers.HealthChecker") as mock_cls,
+        ):
+            mock_cls.return_value.check_all = AsyncMock(return_value=results)
+            result = runner.invoke(app, ["health", "--tag", "core"])
         assert result.exit_code == 0
         assert "filesystem" in result.output
         assert "slack" not in result.output
@@ -490,6 +535,13 @@ class TestSyncCommand:
         assert result.exit_code == 1
         assert "Discovery error" in result.output
 
+    def test_sync_filter_include_tag_no_servers(self) -> None:
+        servers = _sample_servers()
+        with patch("mcp_manager.commands.ops._discover", return_value=servers):
+            result = runner.invoke(app, ["sync", "--ide", "cursor", "--tag", "nonexistent"])
+        assert result.exit_code == 0
+        assert "No MCP servers found" in result.output
+
 
 class TestValidateCommand:
     def test_validate_success(self, tmp_path: Path) -> None:
@@ -614,6 +666,26 @@ class TestMonitorCommand:
         assert result.exit_code == 0
         assert '"restart_count": 0' in result.output
         assert '"fs"' in result.output
+
+    def test_monitor_filter_exclude_tag_no_stdio(self, tmp_path: Path) -> None:
+        config_file = tmp_path / ".mcp-manager.yml"
+        config_file.write_text("project: test\nservers: {}\n")
+        stdio_server = McpServer(
+            name="fs",
+            transport=TransportType.STDIO,
+            stdio_config=StdioConfig(command="npx"),
+            source_tool="test",
+            tags=["experimental"],
+        )
+        with patch(
+            "mcp_manager.project_config.load_servers_from_config",
+            return_value=[stdio_server],
+        ):
+            result = runner.invoke(
+                app, ["monitor", "--project", str(tmp_path), "--exclude-tag", "experimental"]
+            )
+        assert result.exit_code == 0
+        assert "No stdio servers" in result.output
 
 
 class TestProjectCommands:

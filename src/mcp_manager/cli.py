@@ -68,10 +68,19 @@ def list_servers(
     transport: str | None = typer.Option(None, "--transport", help="Filter by transport type."),
     project: Path | None = typer.Option(None, "--project", "-p", help="Project dir for .mcp.json."),
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
+    tag: list[str] | None = typer.Option(
+        None, "--tag", help="Include servers with this tag (repeatable)."
+    ),
+    exclude_tag: list[str] | None = typer.Option(
+        None, "--exclude-tag", help="Exclude servers with this tag (repeatable)."
+    ),
 ) -> None:
     """List all configured MCP servers across tools."""
     try:
-        list_servers_impl(tool=tool, transport=transport, project=project, json=json)
+        list_servers_impl(
+            tool=tool, transport=transport, project=project, json=json,
+            tag=tag, exclude_tag=exclude_tag,
+        )
     except McpManagerError:
         raise typer.Exit(1) from None
 
@@ -97,10 +106,19 @@ def health(
     deep: bool = typer.Option(
         False, "--deep", help="Run deep checks (tools/list validation, dependency checks)."
     ),
+    tag: list[str] | None = typer.Option(
+        None, "--tag", help="Include servers with this tag (repeatable)."
+    ),
+    exclude_tag: list[str] | None = typer.Option(
+        None, "--exclude-tag", help="Exclude servers with this tag (repeatable)."
+    ),
 ) -> None:
     """Health check all servers (status, latency, version)."""
     try:
-        health_impl(server_name=server_name, timeout=timeout, project=project, json=json, deep=deep)
+        health_impl(
+            server_name=server_name, timeout=timeout, project=project,
+            json=json, deep=deep, tag=tag, exclude_tag=exclude_tag,
+        )
     except McpManagerError:
         raise typer.Exit(1) from None
 
@@ -193,10 +211,19 @@ def sync_servers(
     project: Path | None = typer.Option(None, "--project", "-p", help="Project dir."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing."),
     create: bool = typer.Option(False, "--create", help="Create config file if missing."),
+    tag: list[str] | None = typer.Option(
+        None, "--tag", help="Include servers with this tag (repeatable)."
+    ),
+    exclude_tag: list[str] | None = typer.Option(
+        None, "--exclude-tag", help="Exclude servers with this tag (repeatable)."
+    ),
 ) -> None:
     """Write discovered MCP servers to an IDE config file."""
     try:
-        sync_servers_impl(ide=ide, project=project, dry_run=dry_run, create=create)
+        sync_servers_impl(
+            ide=ide, project=project, dry_run=dry_run, create=create,
+            tag=tag, exclude_tag=exclude_tag,
+        )
     except McpManagerError:
         raise typer.Exit(1) from None
 
@@ -226,10 +253,19 @@ def monitor_servers(
         1.0, "--restart-delay", help="Base delay in seconds between restarts."
     ),
     json: bool = typer.Option(False, "--json", help="Output summary as JSON."),
+    tag: list[str] | None = typer.Option(
+        None, "--tag", help="Include servers with this tag (repeatable)."
+    ),
+    exclude_tag: list[str] | None = typer.Option(
+        None, "--exclude-tag", help="Exclude servers with this tag (repeatable)."
+    ),
 ) -> None:
     """Keep stdio MCP servers alive with auto-restart."""
     try:
-        monitor_servers_impl(project=project, restart_delay=restart_delay, json=json)
+        monitor_servers_impl(
+            project=project, restart_delay=restart_delay, json=json,
+            tag=tag, exclude_tag=exclude_tag,
+        )
     except McpManagerError:
         raise typer.Exit(1) from None
 

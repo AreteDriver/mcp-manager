@@ -12,6 +12,7 @@ from mcp_manager.commands.common import (
     _STATUS_ICON,
     _STATUS_STYLE,
     _discover,
+    _filter_by_tags,
     _get_registry,
     _server_summary,
     console,
@@ -28,6 +29,8 @@ def list_servers_impl(
     transport: str | None,
     project: Path | None,
     json: bool,  # noqa: A002
+    tag: list[str] | None = None,
+    exclude_tag: list[str] | None = None,
 ) -> None:
     """List all configured MCP servers across tools."""
     track_command("list")
@@ -45,6 +48,8 @@ def list_servers_impl(
             raise McpManagerError(f"Unknown transport: {transport}") from exc
         servers = [s for s in servers if s.transport == tt]
 
+    servers = _filter_by_tags(servers, include=tag, exclude=exclude_tag)
+
     if not servers:
         console.print("[dim]No MCP servers found.[/dim]")
         return
@@ -58,10 +63,12 @@ def list_servers_impl(
     table.add_column("Name", style="cyan")
     table.add_column("Transport", style="green")
     table.add_column("Source", style="yellow")
+    table.add_column("Tags", style="magenta")
     table.add_column("Target")
 
     for s in sorted(servers, key=lambda x: x.name):
-        table.add_row(s.name, s.transport.value, s.source_tool, _server_summary(s))
+        tags = ", ".join(s.tags) if s.tags else "—"
+        table.add_row(s.name, s.transport.value, s.source_tool, tags, _server_summary(s))
 
     console.print(table)
 
@@ -106,6 +113,8 @@ def health_impl(
     project: Path | None,
     json: bool,  # noqa: A002
     deep: bool,
+    tag: list[str] | None = None,
+    exclude_tag: list[str] | None = None,
 ) -> None:
     """Health check all servers (status, latency, version)."""
     track_command("health")
@@ -117,6 +126,8 @@ def health_impl(
 
     if server_name:
         servers = [s for s in servers if s.name == server_name]
+
+    servers = _filter_by_tags(servers, include=tag, exclude=exclude_tag)
 
     if not servers:
         console.print("[dim]No MCP servers found.[/dim]")

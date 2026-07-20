@@ -10,6 +10,7 @@ from rich.table import Table
 
 from mcp_manager.commands.common import (
     _discover,
+    _filter_by_tags,
     console,
 )
 from mcp_manager.exceptions import McpManagerError
@@ -23,6 +24,8 @@ def sync_servers_impl(
     project: Path | None,
     dry_run: bool,
     create: bool,
+    tag: list[str] | None = None,
+    exclude_tag: list[str] | None = None,
 ) -> None:
     """Write discovered MCP servers to an IDE config file."""
     from mcp_manager.writeback import ConfigWriteback
@@ -33,6 +36,8 @@ def sync_servers_impl(
     except McpManagerError as exc:
         console.print(f"[red]Discovery error:[/red] {exc}")
         raise
+
+    servers = _filter_by_tags(servers, include=tag, exclude=exclude_tag)
 
     if not servers:
         console.print("[dim]No MCP servers found to sync.[/dim]")
@@ -100,6 +105,8 @@ def monitor_servers_impl(
     project: Path | None,
     restart_delay: float,
     json: bool,  # noqa: A002
+    tag: list[str] | None = None,
+    exclude_tag: list[str] | None = None,
 ) -> None:
     """Keep stdio MCP servers alive with auto-restart."""
     from mcp_manager.monitor import ServerMonitor
@@ -113,6 +120,7 @@ def monitor_servers_impl(
         raise McpManagerError(f"Config not found: {target}")
 
     servers = load_servers_from_config(target)
+    servers = _filter_by_tags(servers, include=tag, exclude=exclude_tag)
     stdio_servers = [s for s in servers if s.transport == TransportType.STDIO]
 
     if not stdio_servers:

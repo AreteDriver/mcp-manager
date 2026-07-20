@@ -57,3 +57,26 @@ def _get_registry(path: Path | None = None) -> ServerRegistry:
     reg = ServerRegistry(path=path)
     reg.load()
     return reg
+
+
+def _filter_by_tags(
+    servers: list[McpServer],
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+) -> list[McpServer]:
+    """Filter servers by tag inclusion/exclusion.
+
+    Args:
+        servers: List of servers to filter.
+        include: Only include servers that have at least one of these tags.
+        exclude: Exclude servers that have any of these tags.
+
+    Returns:
+        Filtered list of servers.
+    """
+    result = servers
+    if include is not None:
+        result = [s for s in result if any(t in s.tags for t in include)]
+    if exclude:
+        result = [s for s in result if not any(t in s.tags for t in exclude)]
+    return result

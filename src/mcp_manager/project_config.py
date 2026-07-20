@@ -11,6 +11,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import httpx
 import yaml
 
 from mcp_manager.exceptions import WritebackError
@@ -61,17 +62,29 @@ def init_project_config(path: Path | None = None, *, project_name: str = "my-pro
     return target
 
 
-def parse_project_config(path: Path) -> dict[str, Any]:
+def parse_project_config(
+    path: Path,
+    *,
+    resolve_extends: bool = True,
+    _visited: set[str] | None = None,
+) -> dict[str, Any]:
     """Parse a .mcp-manager.yml file.
+
+    Supports ``extends:`` inheritance from local files, URLs, or GitHub
+    repositories. Resolution order: base → project → env overrides.
+    Project servers override base servers with the same name.
 
     Args:
         path: Path to the YAML file.
+        resolve_extends: Whether to resolve ``extends`` references.
+        _visited: Internal set to detect circular extends.
 
     Returns:
         Parsed dict with keys: project, servers.
 
     Raises:
-        WritebackError: On parse failure or schema violation.
+        WritebackError: On parse failure, schema violation, or circular
+            extends reference.
     """
     if not path.is_file():
         raise WritebackError(f"Project config not found: {path}")
@@ -84,12 +97,25 @@ def parse_project_config(path: Path) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise WritebackError(f"{path} must contain a YAML mapping")
 
+    if resolve_extends and "extends" in raw:
+        visited = _visited or set()
+        canonical = str(path.resolve())
+        if canonical in visited:
+            raise WritebackError(
+                f"Circular extends reference detected: {path}"
+            )
+        visited.add(canonical)
+        raw = _resolve_extends(raw, path.parent, visited)
+        visited.discard(canonical)
+
     project = raw.get("project", "")
     servers_raw = raw.get("servers", {})
     if not isinstance(servers_raw, dict):
         raise WritebackError(f"{path}: 'servers' must be a mapping")
 
-    return {"project": project, "servers": servers_raw}
+    # Return full dict so callers can access custom keys (e.g. from extends).
+    result: dict[str, Any] = {**raw, "project": project, "servers": servers_raw}
+    return result
 
 
 def validate_project_config(path: Path) -> list[str]:
@@ -204,6 +230,158 @@ def export_to_ide(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_extends(
+    raw: dict[str, Any],
+    base_dir: Path,
+    visited: set[str],
+) -> dict[str, Any]:
+    """Resolve ``extends`` references and merge configs.
+
+    Supports:
+    - ``file:///absolute/path.yml`` — local file
+    - ``github:owner/repo/path.yml@ref`` — raw GitHub content
+    - ``https://...`` or ``http://...`` — direct fetch
+
+    Args:
+        raw: Parsed YAML dict (may contain ``extends``).
+        base_dir: Directory to resolve relative paths against.
+        visited: Set of already-visited canonical paths (circular detection).
+
+    Returns:
+        Merged config dict with resolved inheritance.
+    """
+    extends = raw.get("extends")
+    if extends is None:
+        return raw
+
+    sources: list[str]
+    if isinstance(extends, str):
+        sources = [extends]
+    elif isinstance(extends, list):
+        sources = [str(s) for s in extends]
+    else:
+        raise WritebackError(f"'extends' must be a string or list, got {type(extends).__name__}")
+
+    merged: dict[str, Any] = {"project": "", "servers": {}}
+
+    for source in sources:
+        base = _fetch_base_config(source, base_dir, visited)
+        merged["project"] = base.get("project", merged["project"])
+        base_servers = base.get("servers", {})
+        if isinstance(base_servers, dict):
+            merged["servers"] = {**merged["servers"], **base_servers}
+
+    # Project-level values override base
+    merged["project"] = raw.get("project", merged["project"])
+    project_servers = raw.get("servers", {})
+    if isinstance(project_servers, dict):
+        merged["servers"] = {**merged["servers"], **project_servers}
+
+    # Preserve any other top-level keys from the project config
+    for key, value in raw.items():
+        if key not in ("extends", "project", "servers"):
+            merged[key] = value
+
+    return merged
+
+
+def _fetch_base_config(
+    source: str,
+    base_dir: Path,
+    visited: set[str],
+) -> dict[str, Any]:
+    """Fetch and parse a single base config source.
+
+    Args:
+        source: URI or path string.
+        base_dir: Directory for relative path resolution.
+        visited: Circular-detection set.
+
+    Returns:
+        Parsed base config dict.
+    """
+    if source.startswith("file://"):
+        path = Path(source[7:])
+        if not path.is_absolute():
+            path = base_dir / path
+        return parse_project_config(path, _visited=visited)
+
+    if source.startswith("github:"):
+        source = _github_to_raw_url(source)
+
+    if source.startswith(("http://", "https://")):
+        return _fetch_remote_config(source, visited)
+
+    # Treat as local relative path
+    local_path = base_dir / source
+    if not local_path.is_file():
+        raise WritebackError(f"Extends source not found: {source} (looked in {base_dir})")
+    return parse_project_config(local_path, _visited=visited)
+
+
+def _github_to_raw_url(source: str) -> str:
+    """Convert ``github:owner/repo/path@ref`` to raw GitHub URL.
+
+    Examples:
+        ``github:AreteDriver/mcp-manager/base.yml@v0.4.0`` →
+        ``https://raw.githubusercontent.com/AreteDriver/mcp-manager/v0.4.0/base.yml``
+    """
+    if not source.startswith("github:"):
+        raise WritebackError(f"Invalid github source: {source}")
+    rest = source[7:]  # strip "github:"
+    if "@" not in rest:
+        raise WritebackError(
+            f"GitHub source must include @ref: {source} "
+            "(e.g. github:owner/repo/file.yml@main)"
+        )
+    repo_path, ref = rest.rsplit("@", 1)
+    # repo_path is like owner/repo/path/to/file.yml
+    parts = repo_path.split("/", 2)
+    if len(parts) < 3:
+        raise WritebackError(
+            f"GitHub source must be owner/repo/path: {source}"
+        )
+    owner, repo, file_path = parts
+    return (
+        f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{file_path}"
+    )
+
+
+def _fetch_remote_config(
+    url: str,
+    visited: set[str],
+) -> dict[str, Any]:
+    """Fetch a remote config over HTTP(S).
+
+    Args:
+        url: URL to fetch.
+        visited: Circular-detection set.
+
+    Returns:
+        Parsed config dict.
+    """
+    try:
+        resp = httpx.get(url, timeout=15, follow_redirects=True)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise WritebackError(f"Failed to fetch extends source {url}: {exc}") from exc
+
+    try:
+        raw = yaml.safe_load(resp.text)
+    except yaml.YAMLError as exc:
+        raise WritebackError(f"Failed to parse YAML from {url}: {exc}") from exc
+
+    if not isinstance(raw, dict):
+        raise WritebackError(f"Remote config at {url} must contain a YAML mapping")
+
+    # Remote configs may themselves have extends; resolve them.
+    # We use a sentinel path so circular detection works.
+    if "extends" in raw:
+        raw = _resolve_extends(raw, Path.cwd(), visited)
+
+    return raw
+
+
 def _extract_env_var_names(value: str) -> list[str]:
     """Extract referenced env var names from $VAR or ${VAR:-...} syntax."""
     if not isinstance(value, str) or not value.startswith("$"):
@@ -252,6 +430,8 @@ def _config_to_server(name: str, config: dict[str, Any]) -> McpServer:
             else:
                 resolved_env[key] = str(value)
 
+        tags = [str(t) for t in config.get("tags", []) if t is not None]
+
         return McpServer(
             name=name,
             transport=TransportType.STDIO,
@@ -260,6 +440,7 @@ def _config_to_server(name: str, config: dict[str, Any]) -> McpServer:
                 args=[str(a) for a in config.get("args", [])],
                 env=resolved_env,
             ),
+            tags=tags,
             source_tool="project",
         )
 
@@ -269,6 +450,7 @@ def _config_to_server(name: str, config: dict[str, Any]) -> McpServer:
 
     transport_type = str(config.get("type", "sse")).lower()
     transport = TransportType.SSE if transport_type == "sse" else TransportType.HTTP
+    tags = [str(t) for t in config.get("tags", []) if t is not None]
 
     return McpServer(
         name=name,
@@ -278,5 +460,6 @@ def _config_to_server(name: str, config: dict[str, Any]) -> McpServer:
             url=url,
             headers={str(k): str(v) for k, v in config.get("headers", {}).items()},
         ),
+        tags=tags,
         source_tool="project",
     )
