@@ -2,62 +2,44 @@
 
 from __future__ import annotations
 
-import asyncio
-import json as json_mod
 from pathlib import Path
 
 import typer
-from rich.console import Console
-from rich.table import Table
 
 from mcp_manager import __version__
-from mcp_manager.discovery import ConfigDiscovery
+from mcp_manager.commands.common import console
+from mcp_manager.commands.marketplace import (
+    marketplace_info_impl,
+    marketplace_install_impl,
+    marketplace_refresh_impl,
+    search_marketplace_impl,
+)
+from mcp_manager.commands.ops import (
+    lock_versions_impl,
+    monitor_servers_impl,
+    stats_impl,
+    sync_servers_impl,
+    validate_ci_impl,
+)
+from mcp_manager.commands.project import project_app
+from mcp_manager.commands.servers import (
+    add_impl,
+    export_config_impl,
+    health_impl,
+    import_config_impl,
+    list_servers_impl,
+    map_servers_impl,
+    remove_impl,
+    status_impl,
+    test_server_impl,
+)
 from mcp_manager.exceptions import McpManagerError
-from mcp_manager.exporters import export_servers, import_servers
-from mcp_manager.health import HealthChecker
-from mcp_manager.mapper import build_server_map
-from mcp_manager.models import McpServer, NetworkConfig, ServerStatus, StdioConfig, TransportType
-from mcp_manager.registry import ServerRegistry
-from mcp_manager.telemetry import track_command
 
 app = typer.Typer(
     name="mcp-manager",
     help="Manage MCP servers across agentic IDEs.",
 )
-console = Console()
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _discover(
-    tool: str | None = None,
-    project_dir: Path | None = None,
-) -> list[McpServer]:
-    """Run discovery, optionally filtered by tool."""
-    discovery = ConfigDiscovery()
-    if tool:
-        return discovery.discover_tool(tool)
-    return discovery.discover_all(project_dir=project_dir)
-
-
-def _server_summary(server: McpServer) -> str:
-    """One-line summary of a server's connection target."""
-    if server.stdio_config:
-        cmd = server.stdio_config.command
-        args = " ".join(server.stdio_config.args[:2])
-        suffix = " ..." if len(server.stdio_config.args) > 2 else ""
-        return f"{cmd} {args}{suffix}".strip()
-    if server.network_config:
-        return server.network_config.url
-    return "—"
-
-
-# ---------------------------------------------------------------------------
-# Root callback
-# ---------------------------------------------------------------------------
+app.add_typer(project_app, name="project")
 
 
 @app.callback(invoke_without_command=True)
@@ -80,11 +62,6 @@ def main(
         raise typer.Exit()
 
 
-# ---------------------------------------------------------------------------
-# list
-# ---------------------------------------------------------------------------
-
-
 @app.command(name="list")
 def list_servers(
     tool: str | None = typer.Option(None, "--tool", "-t", help="Filter by IDE/tool name."),
@@ -93,46 +70,10 @@ def list_servers(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """List all configured MCP servers across tools."""
-    track_command("list")
     try:
-        servers = _discover(tool=tool, project_dir=project)
-    except McpManagerError as exc:
-        console.print(f"[red]Discovery error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    # Filter by transport.
-    if transport:
-        try:
-            tt = TransportType(transport.lower())
-        except ValueError:
-            console.print(f"[red]Unknown transport:[/red] {transport}")
-            raise typer.Exit(1) from None
-        servers = [s for s in servers if s.transport == tt]
-
-    if not servers:
-        console.print("[dim]No MCP servers found.[/dim]")
-        raise typer.Exit()
-
-    if json:
-        data = [s.model_dump(mode="json", exclude_none=True) for s in servers]
-        console.print_json(json_mod.dumps(data, indent=2))
-        return
-
-    table = Table(title="MCP Servers")
-    table.add_column("Name", style="cyan")
-    table.add_column("Transport", style="green")
-    table.add_column("Source", style="yellow")
-    table.add_column("Target")
-
-    for s in sorted(servers, key=lambda x: x.name):
-        table.add_row(s.name, s.transport.value, s.source_tool, _server_summary(s))
-
-    console.print(table)
-
-
-# ---------------------------------------------------------------------------
-# map
-# ---------------------------------------------------------------------------
+        list_servers_impl(tool=tool, transport=transport, project=project, json=json)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="map")
@@ -141,54 +82,10 @@ def map_servers(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """Show which tools/IDEs use which servers."""
-    track_command("map")
     try:
-        servers = _discover(project_dir=project)
-    except McpManagerError as exc:
-        console.print(f"[red]Discovery error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    if not servers:
-        console.print("[dim]No MCP servers found.[/dim]")
-        raise typer.Exit()
-
-    mappings = build_server_map(servers)
-
-    if json:
-        data = [m.model_dump(mode="json") for m in mappings]
-        console.print_json(json_mod.dumps(data, indent=2))
-        return
-
-    table = Table(title="Server → Tool Mapping")
-    table.add_column("Server", style="cyan")
-    table.add_column("Transport", style="green")
-    table.add_column("Used By", style="yellow")
-
-    for m in mappings:
-        table.add_row(m.server_name, m.transport.value, ", ".join(m.tools))
-
-    console.print(table)
-
-
-# ---------------------------------------------------------------------------
-# health
-# ---------------------------------------------------------------------------
-
-_STATUS_STYLE: dict[ServerStatus, str] = {
-    ServerStatus.HEALTHY: "[green]healthy[/green]",
-    ServerStatus.DEGRADED: "[yellow]degraded[/yellow]",
-    ServerStatus.UNREACHABLE: "[red]unreachable[/red]",
-    ServerStatus.ERROR: "[red]error[/red]",
-    ServerStatus.UNKNOWN: "[dim]unknown[/dim]",
-}
-
-_STATUS_ICON: dict[ServerStatus, str] = {
-    ServerStatus.HEALTHY: "[green]✅[/green]",
-    ServerStatus.DEGRADED: "[yellow]⚠️[/yellow]",
-    ServerStatus.UNREACHABLE: "[red]❌[/red]",
-    ServerStatus.ERROR: "[red]❌[/red]",
-    ServerStatus.UNKNOWN: "[dim]?[/dim]",
-}
+        map_servers_impl(project=project, json=json)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command()
@@ -202,56 +99,10 @@ def health(
     ),
 ) -> None:
     """Health check all servers (status, latency, version)."""
-    track_command("health")
     try:
-        servers = _discover(project_dir=project)
-    except McpManagerError as exc:
-        console.print(f"[red]Discovery error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    if server_name:
-        servers = [s for s in servers if s.name == server_name]
-
-    if not servers:
-        console.print("[dim]No MCP servers found.[/dim]")
-        raise typer.Exit()
-
-    checker = HealthChecker(timeout=timeout, deep=deep)
-    results = asyncio.run(checker.check_all(servers))
-
-    if json:
-        data = [r.model_dump(mode="json", exclude_none=True) for r in results]
-        console.print_json(json_mod.dumps(data, indent=2))
-        return
-
-    table = Table(title="Health Check Results")
-    table.add_column("", width=3)
-    table.add_column("Server", style="cyan")
-    table.add_column("Status")
-    table.add_column("Transport", style="dim")
-    table.add_column("Latency", justify="right")
-    table.add_column("Details")
-
-    for r in sorted(results, key=lambda x: x.server_name):
-        icon = _STATUS_ICON.get(r.status, "")
-        status = _STATUS_STYLE.get(r.status, str(r.status))
-        latency = f"{r.latency_ms:.0f}ms" if r.latency_ms is not None else "—"
-        details = r.error_message or r.server_info.get("server_name", "")
-        table.add_row(icon, r.server_name, status, r.transport.value, latency, details)
-
-    console.print(table)
-
-
-# ---------------------------------------------------------------------------
-# add / remove
-# ---------------------------------------------------------------------------
-
-
-def _get_registry(path: Path | None = None) -> ServerRegistry:
-    """Load the mcp-manager registry."""
-    reg = ServerRegistry(path=path)
-    reg.load()
-    return reg
+        health_impl(server_name=server_name, timeout=timeout, project=project, json=json, deep=deep)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command()
@@ -263,45 +114,10 @@ def add(
     args: list[str] | None = typer.Option(None, "--arg", help="Args for stdio (repeatable)."),
 ) -> None:
     """Add a new MCP server to the mcp-manager registry."""
-    track_command("add")
-    if command and url:
-        console.print("[red]Specify --command (stdio) or --url (network), not both.[/red]")
-        raise typer.Exit(1)
-
-    if not command and not url:
-        console.print("[red]Specify --command for stdio or --url for SSE/HTTP.[/red]")
-        raise typer.Exit(1)
-
     try:
-        tt = TransportType(transport.lower())
-    except ValueError:
-        console.print(f"[red]Unknown transport:[/red] {transport}")
+        add_impl(name=name, command=command, url=url, transport=transport, args=args)
+    except McpManagerError:
         raise typer.Exit(1) from None
-
-    stdio_config: StdioConfig | None = None
-    network_config: NetworkConfig | None = None
-
-    if command:
-        tt = TransportType.STDIO
-        stdio_config = StdioConfig(command=command, args=args or [])
-    elif url:
-        if tt == TransportType.STDIO:
-            tt = TransportType.SSE  # URL provided but transport defaulted to stdio.
-        network_config = NetworkConfig(type=tt.value, url=url)  # type: ignore[arg-type]
-
-    server = McpServer(
-        name=name,
-        transport=tt,
-        stdio_config=stdio_config,
-        network_config=network_config,
-        source_tool="mcp-manager",
-    )
-
-    reg = _get_registry()
-    reg.add(server)
-    reg.save()
-
-    console.print(f"[green]Added server:[/green] {name} ({tt.value})")
 
 
 @app.command()
@@ -309,19 +125,10 @@ def remove(
     name: str = typer.Argument(..., help="Server name to remove."),
 ) -> None:
     """Remove a server from the mcp-manager registry."""
-    track_command("remove")
-    reg = _get_registry()
-    if reg.remove(name):
-        reg.save()
-        console.print(f"[green]Removed:[/green] {name}")
-    else:
-        console.print(f"[yellow]Server not found in registry:[/yellow] {name}")
-        raise typer.Exit(1)
-
-
-# ---------------------------------------------------------------------------
-# export / import
-# ---------------------------------------------------------------------------
+    try:
+        remove_impl(name=name)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="export")
@@ -332,24 +139,10 @@ def export_config(
     project: Path | None = typer.Option(None, "--project", "-p", help="Project dir."),
 ) -> None:
     """Export all discovered servers to a portable YAML/JSON file."""
-    track_command("export")
     try:
-        servers = _discover(tool=tool, project_dir=project)
-    except McpManagerError as exc:
-        console.print(f"[red]Discovery error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    if not servers:
-        console.print("[dim]No servers to export.[/dim]")
-        raise typer.Exit()
-
-    try:
-        export_servers(servers, output, fmt=fmt)
-    except McpManagerError as exc:
-        console.print(f"[red]Export error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    console.print(f"[green]Exported {len(servers)} server(s) to:[/green] {output}")
+        export_config_impl(output=output, fmt=fmt, tool=tool, project=project)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="import")
@@ -358,33 +151,10 @@ def import_config(
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be imported."),
 ) -> None:
     """Import servers from a YAML/JSON file into the registry."""
-    track_command("import")
     try:
-        servers = import_servers(input_file)
-    except McpManagerError as exc:
-        console.print(f"[red]Import error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    if not servers:
-        console.print("[dim]No servers found in file.[/dim]")
-        raise typer.Exit()
-
-    if dry_run:
-        console.print(f"[dim]Would import {len(servers)} server(s):[/dim]")
-        for s in servers:
-            console.print(f"  {s.name} ({s.transport.value})")
-        return
-
-    reg = _get_registry()
-    for s in servers:
-        reg.add(s)
-    reg.save()
-    console.print(f"[green]Imported {len(servers)} server(s) to registry.[/green]")
-
-
-# ---------------------------------------------------------------------------
-# test (capability probing)
-# ---------------------------------------------------------------------------
+        import_config_impl(input_file=input_file, dry_run=dry_run)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="test")
@@ -394,88 +164,16 @@ def test_server(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """Test a specific server's capabilities via full protocol handshake."""
-    track_command("test")
     try:
-        servers = _discover(project_dir=project)
-    except McpManagerError as exc:
-        console.print(f"[red]Discovery error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    matches = [s for s in servers if s.name == server_name]
-    if not matches:
-        console.print(f"[red]Server not found:[/red] {server_name}")
-        raise typer.Exit(1)
-
-    server = matches[0]
-    checker = HealthChecker(timeout=15)
-    result = asyncio.run(checker.check(server))
-
-    if json:
-        console.print_json(
-            json_mod.dumps(result.model_dump(mode="json", exclude_none=True), indent=2)
-        )
-        return
-
-    console.print(f"\n[bold]Server:[/bold] {server.name}")
-    console.print(f"[bold]Transport:[/bold] {server.transport.value}")
-    console.print(f"[bold]Source:[/bold] {server.source_tool}")
-
-    if server.stdio_config:
-        cmd = f"{server.stdio_config.command} {' '.join(server.stdio_config.args)}"
-        console.print(f"[bold]Command:[/bold] {cmd}")
-    if server.network_config:
-        console.print(f"[bold]URL:[/bold] {server.network_config.url}")
-
-    icon = _STATUS_ICON.get(result.status, "")
-    status = _STATUS_STYLE.get(result.status, str(result.status))
-    console.print(f"\n{icon} [bold]Status:[/bold] {status}")
-
-    if result.latency_ms is not None:
-        console.print(f"[bold]Latency:[/bold] {result.latency_ms:.0f}ms")
-    if result.protocol_version:
-        console.print(f"[bold]Protocol:[/bold] {result.protocol_version}")
-    if result.server_info.get("server_name"):
-        console.print(f"[bold]Server Name:[/bold] {result.server_info['server_name']}")
-    if result.server_info.get("server_version"):
-        console.print(f"[bold]Server Version:[/bold] {result.server_info['server_version']}")
-    if result.server_info.get("capabilities"):
-        caps = list(result.server_info["capabilities"].keys())
-        console.print(f"[bold]Capabilities:[/bold] {', '.join(caps) if caps else 'none'}")
-    if result.error_message:
-        console.print(f"[red]Error:[/red] {result.error_message}")
-    console.print()
-
-
-# ---------------------------------------------------------------------------
-# status (license info)
-# ---------------------------------------------------------------------------
+        test_server_impl(server_name=server_name, project=project, json=json)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command()
 def status() -> None:
     """Show license status and available features."""
-    track_command("status")
-    from mcp_manager.licensing import TIER_DEFINITIONS, get_license_info
-
-    info = get_license_info()
-    tier_config = TIER_DEFINITIONS[info.tier]
-
-    console.print(f"\n[bold]mcp-manager {__version__}[/bold]")
-    console.print(f"[bold]Tier:[/bold] {tier_config.name} ({tier_config.price_label})")
-
-    if info.license_key:
-        masked = info.license_key[:9] + "****-****"
-        console.print(f"[bold]Key:[/bold] {masked}")
-        valid_str = "[green]valid[/green]" if info.valid else "[red]invalid[/red]"
-        console.print(f"[bold]Valid:[/bold] {valid_str}")
-
-    console.print(f"\n[bold]Features:[/bold] {', '.join(tier_config.features)}")
-    console.print()
-
-
-# ---------------------------------------------------------------------------
-# stats (telemetry)
-# ---------------------------------------------------------------------------
+    status_impl()
 
 
 @app.command()
@@ -483,80 +181,10 @@ def stats(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """Show local usage telemetry (requires MCP_MANAGER_TELEMETRY=1)."""
-    from mcp_manager.telemetry import TelemetryStore, _telemetry_dir, is_enabled
-
-    track_command("stats")
-
-    if not is_enabled():
-        console.print(
-            "[dim]Telemetry is disabled. "
-            "Set MCP_MANAGER_TELEMETRY=1 to enable local usage tracking.[/dim]"
-        )
-        return
-
-    db_file = _telemetry_dir() / "telemetry.db"
-    if not db_file.exists():
-        console.print("[dim]No telemetry data yet.[/dim]")
-        return
-
-    ts = TelemetryStore(db_file)
     try:
-        commands = ts.get_command_counts()
-        pro_gates = ts.get_pro_gate_counts()
-        total = ts.get_total_events()
-        first = ts.get_first_event_time()
-        last = ts.get_last_event_time()
-        activity = ts.get_daily_activity()
-
-        if json:
-            data = {
-                "total_events": total,
-                "first_event": first,
-                "last_event": last,
-                "commands": commands,
-                "pro_gate_hits": pro_gates,
-                "daily_activity": [{"date": d, "count": c} for d, c in activity],
-            }
-            console.print_json(json_mod.dumps(data, indent=2))
-        else:
-            overview = Table(title="Telemetry Overview")
-            overview.add_column("Metric", style="cyan")
-            overview.add_column("Value", style="green")
-            overview.add_row("Total Events", str(total))
-            overview.add_row("First Event", first or "n/a")
-            overview.add_row("Last Event", last or "n/a")
-            console.print(overview)
-
-            if commands:
-                cmd_table = Table(title="Command Usage")
-                cmd_table.add_column("Command", style="cyan")
-                cmd_table.add_column("Count", style="green", justify="right")
-                for name, count in commands.items():
-                    cmd_table.add_row(name, str(count))
-                console.print(cmd_table)
-
-            if pro_gates:
-                gate_table = Table(title="Pro Feature Gate Hits")
-                gate_table.add_column("Feature", style="cyan")
-                gate_table.add_column("Attempts", style="yellow", justify="right")
-                for name, count in pro_gates.items():
-                    gate_table.add_row(name, str(count))
-                console.print(gate_table)
-
-            if activity:
-                act_table = Table(title="Daily Activity (Last 7 Days)")
-                act_table.add_column("Date", style="cyan")
-                act_table.add_column("Events", style="green", justify="right")
-                for day, count in activity:
-                    act_table.add_row(day, str(count))
-                console.print(act_table)
-    finally:
-        ts.close()
-
-
-# ---------------------------------------------------------------------------
-# sync (config write-back)
-# ---------------------------------------------------------------------------
+        stats_impl(json=json)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="sync")
@@ -567,37 +195,10 @@ def sync_servers(
     create: bool = typer.Option(False, "--create", help="Create config file if missing."),
 ) -> None:
     """Write discovered MCP servers to an IDE config file."""
-    from mcp_manager.writeback import ConfigWriteback
-
-    track_command("sync")
     try:
-        servers = _discover(project_dir=project)
-    except McpManagerError as exc:
-        console.print(f"[red]Discovery error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    if not servers:
-        console.print("[dim]No MCP servers found to sync.[/dim]")
-        raise typer.Exit()
-
-    writeback = ConfigWriteback()
-
-    if dry_run:
-        preview = writeback.preview(ide, servers)
-        console.print_json(json_mod.dumps(preview, indent=2))
-        return
-
-    try:
-        path = writeback.write_servers(ide, servers, create_if_missing=create)
-        console.print(f"[green]Synced {len(servers)} server(s) to[/green] {path}")
-    except McpManagerError as exc:
-        console.print(f"[red]Sync error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-
-# ---------------------------------------------------------------------------
-# validate (CI gate)
-# ---------------------------------------------------------------------------
+        sync_servers_impl(ide=ide, project=project, dry_run=dry_run, create=create)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="validate")
@@ -610,46 +211,10 @@ def validate_ci(
     ),
 ) -> None:
     """Validate .mcp-manager.yml (for CI gates)."""
-    from mcp_manager.project_config import DEFAULT_FILENAME, validate_project_config
-
-    track_command("validate")
-    target = path or Path.cwd()
-    if target.is_dir():
-        target = target / DEFAULT_FILENAME
-
-    if not target.exists():
-        console.print(f"[red]Config not found:[/red] {target}")
-        raise typer.Exit(1)
-
-    errors = validate_project_config(target)
-    if errors:
-        console.print(f"[red]{len(errors)} error(s) found:[/red]")
-        for err in errors:
-            console.print(f"  • {err}")
-        raise typer.Exit(1)
-
-    if strict:
-        from mcp_manager.health import HealthChecker
-        from mcp_manager.project_config import load_servers_from_config
-
-        servers = load_servers_from_config(target)
-        if servers:
-            checker = HealthChecker(deep=True)
-            results = asyncio.run(checker.check_all(servers))
-            failed = [r for r in results if r.status not in (ServerStatus.HEALTHY,)]
-            if failed:
-                console.print(f"[red]{len(failed)} server(s) failed deep health check:[/red]")
-                for r in failed:
-                    console.print(f"  • {r.server_name}: {r.error_message}")
-                raise typer.Exit(1)
-            console.print(f"[green]{len(results)} server(s) passed deep health check.[/green]")
-
-    console.print(f"[green]{target} is valid.[/green]")
-
-
-# ---------------------------------------------------------------------------
-# monitor (auto-restart)
-# ---------------------------------------------------------------------------
+    try:
+        validate_ci_impl(path=path, strict=strict)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="monitor")
@@ -663,127 +228,10 @@ def monitor_servers(
     json: bool = typer.Option(False, "--json", help="Output summary as JSON."),
 ) -> None:
     """Keep stdio MCP servers alive with auto-restart."""
-    from mcp_manager.monitor import ServerMonitor
-    from mcp_manager.project_config import DEFAULT_FILENAME, load_servers_from_config
-
-    track_command("monitor")
-    target = (project or Path.cwd()) / DEFAULT_FILENAME
-
-    if not target.exists():
-        console.print(f"[red]Config not found:[/red] {target}")
-        raise typer.Exit(1)
-
-    servers = load_servers_from_config(target)
-    stdio_servers = [s for s in servers if s.transport == TransportType.STDIO]
-
-    if not stdio_servers:
-        console.print("[dim]No stdio servers to monitor.[/dim]")
-        raise typer.Exit()
-
-    monitor = ServerMonitor(stdio_servers, restart_delay=restart_delay)
-    console.print(f"Monitoring {len(stdio_servers)} stdio server(s). Press Ctrl+C to stop.")
-
     try:
-        summary = asyncio.run(monitor.run())
-    except KeyboardInterrupt:
-        raise typer.Exit() from None
-
-    if json:
-        console.print_json(json_mod.dumps(summary, indent=2))
-    else:
-        table = Table(title="Monitor Summary")
-        table.add_column("Server", style="cyan")
-        table.add_column("Restarts", style="yellow", justify="right")
-        table.add_column("Final Exit", style="red")
-        for name, data in summary.items():
-            table.add_row(
-                name,
-                str(data["restart_count"]),
-                str(data["final_exit_code"]) if data["final_exit_code"] is not None else "—",
-            )
-        console.print(table)
-
-
-# ---------------------------------------------------------------------------
-# project (project-scoped config)
-# ---------------------------------------------------------------------------
-
-
-project_app = typer.Typer(help="Manage project-scoped MCP configurations.")
-app.add_typer(project_app, name="project")
-
-
-@project_app.command(name="init")
-def project_init(
-    name: str = typer.Option("my-project", "--name", "-n", help="Project name for the template."),
-    path: Path | None = typer.Option(
-        None, "--path", "-p", help="Directory to create .mcp-manager.yml in."
-    ),
-) -> None:
-    """Scaffold a new .mcp-manager.yml in the target directory."""
-    from mcp_manager.project_config import init_project_config
-
-    try:
-        target = init_project_config(path, project_name=name)
-        console.print(f"[green]Created[/green] {target}")
-    except McpManagerError as exc:
-        console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-
-@project_app.command(name="validate")
-def project_validate(
-    path: Path | None = typer.Option(
-        None, "--path", "-p", help="Path to .mcp-manager.yml or its directory."
-    ),
-) -> None:
-    """Validate a .mcp-manager.yml file."""
-    from mcp_manager.project_config import DEFAULT_FILENAME, validate_project_config
-
-    target = path or Path.cwd()
-    if target.is_dir():
-        target = target / DEFAULT_FILENAME
-
-    errors = validate_project_config(target)
-    if errors:
-        console.print(f"[red]{len(errors)} error(s) found:[/red]")
-        for err in errors:
-            console.print(f"  • {err}")
-        raise typer.Exit(1)
-    else:
-        console.print(f"[green]{target} is valid.[/green]")
-
-
-@project_app.command(name="export")
-def project_export(
-    ide: str = typer.Option(..., "--ide", "-i", help="IDE to export to."),
-    path: Path | None = typer.Option(
-        None, "--path", "-p", help="Path to .mcp-manager.yml or its directory."
-    ),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing."),
-    create: bool = typer.Option(False, "--create", help="Create IDE config if missing."),
-) -> None:
-    """Export project config to an IDE config file."""
-    from mcp_manager.project_config import DEFAULT_FILENAME, export_to_ide
-
-    target = path or Path.cwd()
-    if target.is_dir():
-        target = target / DEFAULT_FILENAME
-
-    try:
-        out_path = export_to_ide(target, ide, dry_run=dry_run, create=create)
-        if dry_run:
-            console.print(f"[dim]Dry-run: would export to[/dim] {out_path}")
-        else:
-            console.print(f"[green]Exported to[/green] {out_path}")
-    except McpManagerError as exc:
-        console.print(f"[red]Export error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-
-# ---------------------------------------------------------------------------
-# lock (version pinning)
-# ---------------------------------------------------------------------------
+        monitor_servers_impl(project=project, restart_delay=restart_delay, json=json)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="lock")
@@ -797,78 +245,10 @@ def lock_versions(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """Resolve and pin MCP server versions to .mcp-manager.lock."""
-    from mcp_manager.lockfile import (
-        check_lockfile,
-        generate_lockfile,
-        read_lockfile,
-        write_lockfile,
-    )
-    from mcp_manager.project_config import DEFAULT_FILENAME, load_servers_from_config
-
-    track_command("lock")
-    target = path or Path.cwd()
-    if target.is_dir():
-        target = target / DEFAULT_FILENAME
-
-    if not target.exists():
-        console.print(f"[red]Config not found:[/red] {target}")
-        raise typer.Exit(1)
-
     try:
-        servers = load_servers_from_config(target)
-    except McpManagerError as exc:
-        console.print(f"[red]Config error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    lockfile_path = target.parent / ".mcp-manager.lock"
-
-    if check:
-        if not lockfile_path.exists():
-            console.print(f"[red]Lockfile not found:[/red] {lockfile_path}")
-            raise typer.Exit(1)
-
-        try:
-            lockfile = read_lockfile(lockfile_path)
-        except McpManagerError as exc:
-            console.print(f"[red]Lockfile error:[/red] {exc}")
-            raise typer.Exit(1) from exc
-
-        errors = check_lockfile(servers, lockfile)
-        if errors:
-            if json:
-                console.print_json(json_mod.dumps({"errors": errors}, indent=2))
-            else:
-                console.print(f"[red]{len(errors)} lockfile error(s):[/red]")
-                for err in errors:
-                    console.print(f"  • {err}")
-            raise typer.Exit(1)
-
-        console.print("[green]Lockfile is current.[/green]")
-        return
-
-    lockfile = generate_lockfile(servers)
-    write_lockfile(lockfile_path, lockfile)
-
-    if json:
-        data = {
-            "lockfile": str(lockfile_path),
-            "servers": {name: entry.to_dict() for name, entry in lockfile.servers.items()},
-        }
-        console.print_json(json_mod.dumps(data, indent=2))
-    else:
-        console.print(f"[green]Wrote lockfile:[/green] {lockfile_path}")
-        for name, entry in lockfile.servers.items():
-            if entry.error:
-                console.print(f"  [yellow]{name}:[/yellow] {entry.error}")
-            elif entry.resolved_version:
-                console.print(f"  [green]{name}:[/green] {entry.resolved_version}")
-            else:
-                console.print(f"  [dim]{name}:[/dim] no version resolved")
-
-
-# ---------------------------------------------------------------------------
-# marketplace
-# ---------------------------------------------------------------------------
+        lock_versions_impl(path=path, check=check, json=json)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="search")
@@ -883,56 +263,12 @@ def search_marketplace(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """Search the MCP server marketplace."""
-    from mcp_manager.marketplace import MarketplaceError, load_index
-
-    track_command("search")
     try:
-        index = load_index()
-    except MarketplaceError as exc:
-        console.print(f"[red]Marketplace error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    results = index.search(
-        query=query or None,
-        category=category or None,
-        verified_only=not include_unverified,
-    )
-
-    if json:
-        data = {
-            "query": query,
-            "category": category or None,
-            "verified_only": not include_unverified,
-            "servers": [s.to_dict() for s in results],
-        }
-        console.print_json(json_mod.dumps(data, indent=2))
-        return
-
-    if not results:
-        console.print("[dim]No marketplace servers found.[/dim]")
-        return
-
-    from rich.table import Table
-
-    table = Table(title="MCP Server Marketplace")
-    table.add_column("Name", style="cyan")
-    table.add_column("Description")
-    table.add_column("Category")
-    table.add_column("Quality")
-
-    for server in results:
-        badge = "⬜"
-        if server.quality.verified and server.quality.health_pass_rate >= 0.9:
-            badge = "🟢"
-        elif server.quality.verified and server.quality.health_pass_rate >= 0.5:
-            badge = "🟡"
-        elif server.quality.verified:
-            badge = "🔴"
-        quality_str = f"{badge} {server.quality.health_pass_rate:.0%}"
-        categories_str = ", ".join(server.categories)
-        table.add_row(server.display_name, server.description, categories_str, quality_str)
-
-    console.print(table)
+        search_marketplace_impl(
+            query=query, category=category, include_unverified=include_unverified, json=json
+        )
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="info")
@@ -941,43 +277,10 @@ def marketplace_info(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
     """Show detailed info for a marketplace server."""
-    from mcp_manager.marketplace import MarketplaceError, load_index
-
-    track_command("info")
     try:
-        index = load_index()
-    except MarketplaceError as exc:
-        console.print(f"[red]Marketplace error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    server = index.get(name)
-    if not server:
-        console.print(f"[red]Server not found:[/red] {name}")
-        raise typer.Exit(1)
-
-    if json:
-        console.print_json(json_mod.dumps(server.to_dict(), indent=2))
-        return
-
-    console.print(f"[bold]{server.display_name}[/bold]")
-    console.print(f"  Name:       {server.name}")
-    console.print(f"  Repository: {server.repository}")
-    console.print(f"  License:    {server.quality.license_id}")
-    console.print(f"  Verified:   {'✅' if server.quality.verified else '⬜'}")
-    console.print(f"  Health:     {server.quality.health_pass_rate:.0%}")
-    console.print(f"  Tools:      {server.quality.tool_count}")
-    console.print(f"  Categories: {', '.join(server.categories)}")
-    console.print()
-    console.print(f"  {server.description}")
-    console.print()
-    console.print("[bold]Install:[/bold]")
-    console.print(f"  command: {server.install_spec.get('command')}")
-    console.print(f"  args:    {server.install_spec.get('args', [])}")
-    env = server.install_spec.get("env", {})
-    if env:
-        console.print("  env:")
-        for k, v in env.items():
-            console.print(f"    {k}: {v}")
+        marketplace_info_impl(name=name, json=json)
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="install")
@@ -993,55 +296,12 @@ def marketplace_install(
     ),
 ) -> None:
     """Install a marketplace server into .mcp-manager.yml."""
-    from mcp_manager.marketplace import MarketplaceError, install_to_project, load_index
-
-    track_command("install")
-    target = path or Path.cwd()
-    if target.is_file():
-        target = target.parent
-
     try:
-        index = load_index()
-    except MarketplaceError as exc:
-        console.print(f"[red]Marketplace error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    server = index.get(name)
-    if not server:
-        console.print(f"[red]Server not found:[/red] {name}")
-        raise typer.Exit(1)
-
-    try:
-        config_path = install_to_project(
-            server,
-            target,
-            dry_run=dry_run,
-            interactive=not no_prompt,
+        marketplace_install_impl(
+            name=name, path=path, dry_run=dry_run, no_prompt=no_prompt, lock=lock
         )
-    except MarketplaceError as exc:
-        console.print(f"[red]Install error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    if dry_run:
-        console.print(f"[dim]Dry-run: would add {name!r} to {config_path}[/dim]")
-    else:
-        console.print(f"[green]Added {name!r} to {config_path}[/green]")
-        placeholders = server._env_var_placeholders()
-        if placeholders and no_prompt:
-            console.print(f"[yellow]Remember to set env vars:[/yellow] {', '.join(placeholders)}")
-
-        if lock:
-            from mcp_manager.lockfile import generate_lockfile, write_lockfile
-            from mcp_manager.project_config import load_servers_from_config
-
-            try:
-                servers = load_servers_from_config(config_path)
-                lockfile = generate_lockfile(servers)
-                lockfile_path = config_path.parent / ".mcp-manager.lock"
-                write_lockfile(lockfile_path, lockfile)
-                console.print(f"[green]Wrote lockfile:[/green] {lockfile_path}")
-            except Exception as exc:
-                console.print(f"[yellow]Lockfile warning:[/yellow] {exc}")
+    except McpManagerError:
+        raise typer.Exit(1) from None
 
 
 @app.command(name="marketplace-refresh")
@@ -1053,18 +313,7 @@ def marketplace_refresh(
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing."),
 ) -> None:
     """Refresh quality scores for all marketplace servers."""
-    from mcp_manager.marketplace import MarketplaceError, refresh_marketplace
-
-    track_command("marketplace-refresh")
     try:
-        updated = refresh_marketplace(output, timeout=timeout, dry_run=dry_run)
-    except MarketplaceError as exc:
-        console.print(f"[red]Refresh error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-    if dry_run:
-        console.print(f"[dim]Dry-run: would update marketplace scores in {output}.[/dim]")
-    elif updated:
-        console.print(f"[green]Updated marketplace scores in {output}.[/green]")
-    else:
-        console.print("[dim]No changes to marketplace scores.[/dim]")
+        marketplace_refresh_impl(output=output, timeout=timeout, dry_run=dry_run)
+    except McpManagerError:
+        raise typer.Exit(1) from None

@@ -131,8 +131,12 @@ def validate_project_config(path: Path) -> list[str]:
         env = config.get("env", {})
         if isinstance(env, dict):
             for _key, value in env.items():
-                if isinstance(value, str) and value.startswith("$") and value[1:] not in os.environ:
-                    errors.append(f"Server {name!r}: env var {value[1:]!r} is not set")
+                if isinstance(value, str) and ":-" in value:
+                    continue  # Has explicit default — safe even if unset
+                var_names = _extract_env_var_names(value)
+                for var_name in var_names:
+                    if var_name not in os.environ:
+                        errors.append(f"Server {name!r}: env var {var_name!r} is not set")
 
         # Check command exists (best-effort)
         cmd = config.get("command")
@@ -161,7 +165,7 @@ def load_servers_from_config(path: Path) -> list[McpServer]:
             continue
         try:
             results.append(_config_to_server(name, config))
-        except Exception as exc:
+        except (WritebackError, KeyError, TypeError, ValueError) as exc:
             logger.warning("Failed to parse server %r: %s", name, exc)
 
     return results
@@ -200,6 +204,42 @@ def export_to_ide(
 # ---------------------------------------------------------------------------
 
 
+def _extract_env_var_names(value: str) -> list[str]:
+    """Extract referenced env var names from $VAR or ${VAR:-...} syntax."""
+    if not isinstance(value, str) or not value.startswith("$"):
+        return []
+    if value.startswith("${") and value.endswith("}"):
+        inner = value[2:-1]
+        if ":-" in inner:
+            var_name, _ = inner.split(":-", 1)
+            return [var_name]
+        if ":?" in inner:
+            var_name, _ = inner.split(":?", 1)
+            return [var_name]
+        return [inner]
+    return [value[1:]]
+
+
+def _resolve_env_var(value: str) -> str:
+    """Resolve $VAR, ${VAR}, ${VAR:-default}, or ${VAR:?error}."""
+    if not isinstance(value, str) or not value.startswith("$"):
+        return value
+    if value.startswith("${") and value.endswith("}"):
+        inner = value[2:-1]
+        if ":-" in inner:
+            var_name, default = inner.split(":-", 1)
+            return os.environ.get(var_name, default)
+        if ":?" in inner:
+            var_name, _ = inner.split(":?", 1)
+            if var_name not in os.environ:
+                raise WritebackError(f"Required env var {var_name!r} is not set")
+            return os.environ[var_name]
+        return os.environ.get(inner, value)
+    # Simple $VAR
+    var_name = value[1:]
+    return os.environ.get(var_name, value)
+
+
 def _config_to_server(name: str, config: dict[str, Any]) -> McpServer:
     """Convert a .mcp-manager.yml server dict to McpServer."""
     if "command" in config:
@@ -208,8 +248,7 @@ def _config_to_server(name: str, config: dict[str, Any]) -> McpServer:
         resolved_env = {}
         for key, value in env.items():
             if isinstance(value, str) and value.startswith("$"):
-                var_name = value[1:]
-                resolved_env[key] = os.environ.get(var_name, value)
+                resolved_env[key] = _resolve_env_var(value)
             else:
                 resolved_env[key] = str(value)
 
