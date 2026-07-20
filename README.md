@@ -105,6 +105,16 @@ servers:
 - Validated before write-back (missing env vars or commands caught early)
 - Project config wins on merge conflicts with global registry
 
+### 🔐 Version Pinning (Lockfile)
+Pin exact MCP server versions for reproducible CI and team consistency:
+```bash
+mcp-manager lock                    # Resolve and write .mcp-manager.lock
+mcp-manager lock --check            # Validate lockfile is current (CI gate)
+mcp-manager lock --json             # Output resolved versions as JSON
+```
+
+The lockfile records the resolved npm version for each `npx`-based server so every developer and CI runner uses identical tooling.
+
 ### 🔄 Export / Import
 Portable YAML/JSON for backup, sharing, and CI:
 ```bash
@@ -178,6 +188,10 @@ mcp-manager monitor                   # Foreground monitor, Ctrl+C to stop
 # CI gate — validate .mcp-manager.yml in CI
 mcp-manager validate                  # Fast validation
 mcp-manager validate --strict         # + deep health checks on all servers
+
+# Lockfile — pin exact versions
+mcp-manager lock                      # Resolve and write .mcp-manager.lock
+mcp-manager lock --check            # Validate lockfile is current (CI gate)
 ```
 
 ---
@@ -214,6 +228,7 @@ mcp-manager validate --strict         # + deep health checks on all servers
 - [x] Deep health checks (dependency validation + `tools/list` verification)
 - [x] Server auto-restart monitor
 - [x] CI gate (`mcp-manager validate` + GitHub Action)
+- [x] Version pinning lockfile (`mcp-manager lock --check`)
 - [ ] Server marketplace / remote registry
 
 See [ROADMAP.md](ROADMAP.md) for what's next.

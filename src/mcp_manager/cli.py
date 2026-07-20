@@ -779,3 +779,88 @@ def project_export(
     except McpManagerError as exc:
         console.print(f"[red]Export error:[/red] {exc}")
         raise typer.Exit(1) from exc
+
+
+# ---------------------------------------------------------------------------
+# lock (version pinning)
+# ---------------------------------------------------------------------------
+
+
+@app.command(name="lock")
+def lock_versions(
+    path: Path | None = typer.Option(
+        None, "--path", "-p", help="Path to .mcp-manager.yml or its directory."
+    ),
+    check: bool = typer.Option(
+        False, "--check", help="Validate lockfile is current instead of writing."
+    ),
+    json: bool = typer.Option(False, "--json", help="Output as JSON."),
+) -> None:
+    """Resolve and pin MCP server versions to .mcp-manager.lock."""
+    from mcp_manager.lockfile import (
+        check_lockfile,
+        generate_lockfile,
+        read_lockfile,
+        write_lockfile,
+    )
+    from mcp_manager.project_config import DEFAULT_FILENAME, load_servers_from_config
+
+    track_command("lock")
+    target = path or Path.cwd()
+    if target.is_dir():
+        target = target / DEFAULT_FILENAME
+
+    if not target.exists():
+        console.print(f"[red]Config not found:[/red] {target}")
+        raise typer.Exit(1)
+
+    try:
+        servers = load_servers_from_config(target)
+    except McpManagerError as exc:
+        console.print(f"[red]Config error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    lockfile_path = target.parent / ".mcp-manager.lock"
+
+    if check:
+        if not lockfile_path.exists():
+            console.print(f"[red]Lockfile not found:[/red] {lockfile_path}")
+            raise typer.Exit(1)
+
+        try:
+            lockfile = read_lockfile(lockfile_path)
+        except McpManagerError as exc:
+            console.print(f"[red]Lockfile error:[/red] {exc}")
+            raise typer.Exit(1) from exc
+
+        errors = check_lockfile(servers, lockfile)
+        if errors:
+            if json:
+                console.print_json(json_mod.dumps({"errors": errors}, indent=2))
+            else:
+                console.print(f"[red]{len(errors)} lockfile error(s):[/red]")
+                for err in errors:
+                    console.print(f"  • {err}")
+            raise typer.Exit(1)
+
+        console.print("[green]Lockfile is current.[/green]")
+        return
+
+    lockfile = generate_lockfile(servers)
+    write_lockfile(lockfile_path, lockfile)
+
+    if json:
+        data = {
+            "lockfile": str(lockfile_path),
+            "servers": {name: entry.to_dict() for name, entry in lockfile.servers.items()},
+        }
+        console.print_json(json_mod.dumps(data, indent=2))
+    else:
+        console.print(f"[green]Wrote lockfile:[/green] {lockfile_path}")
+        for name, entry in lockfile.servers.items():
+            if entry.error:
+                console.print(f"  [yellow]{name}:[/yellow] {entry.error}")
+            elif entry.resolved_version:
+                console.print(f"  [green]{name}:[/green] {entry.resolved_version}")
+            else:
+                console.print(f"  [dim]{name}:[/dim] no version resolved")

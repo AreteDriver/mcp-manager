@@ -691,3 +691,96 @@ class TestProjectCommands:
             result = runner.invoke(app, ["project", "export", "--ide", "cursor", "--path", "/fake"])
         assert result.exit_code == 1
         assert "Export error" in result.output
+
+
+class TestLockCommand:
+    """CLI tests for the lock command."""
+
+    def test_lock_missing_config(self, tmp_path: Path) -> None:
+        result = runner.invoke(app, ["lock", "--path", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "Config not found" in result.output
+
+    def test_lock_writes_lockfile(self, tmp_path: Path) -> None:
+        config = tmp_path / ".mcp-manager.yml"
+        config.write_text("servers:\n  srv:\n    command: npx\n    args: [pkg@1.0.0]\n")
+        result = runner.invoke(app, ["lock", "--path", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "Wrote lockfile" in result.output
+        lockfile = tmp_path / ".mcp-manager.lock"
+        assert lockfile.exists()
+
+    def test_lock_json_output(self, tmp_path: Path) -> None:
+        config = tmp_path / ".mcp-manager.yml"
+        config.write_text("servers:\n  srv:\n    command: npx\n    args: [pkg@1.0.0]\n")
+        result = runner.invoke(app, ["lock", "--path", str(tmp_path), "--json"])
+        assert result.exit_code == 0
+        assert '"lockfile"' in result.output
+
+    def test_lock_check_missing_lockfile(self, tmp_path: Path) -> None:
+        config = tmp_path / ".mcp-manager.yml"
+        config.write_text("servers:\n  srv:\n    command: npx\n    args: [pkg@1.0.0]\n")
+        result = runner.invoke(app, ["lock", "--check", "--path", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "Lockfile not found" in result.output
+
+    def test_lock_check_current(self, tmp_path: Path) -> None:
+        config = tmp_path / ".mcp-manager.yml"
+        config.write_text("servers:\n  srv:\n    command: npx\n    args: [pkg@1.0.0]\n")
+        lockfile = tmp_path / ".mcp-manager.lock"
+        lockfile.write_text(
+            "lockfileVersion: '1'\n"
+            "resolvedAt: '2026-01-01T00:00:00+00:00'\n"
+            "servers:\n"
+            "  srv:\n"
+            "    resolvedVersion: 1.0.0\n"
+        )
+        result = runner.invoke(app, ["lock", "--check", "--path", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "Lockfile is current" in result.output
+
+    def test_lock_check_mismatch(self, tmp_path: Path) -> None:
+        config = tmp_path / ".mcp-manager.yml"
+        config.write_text("servers:\n  srv:\n    command: npx\n    args: [pkg@2.0.0]\n")
+        lockfile = tmp_path / ".mcp-manager.lock"
+        lockfile.write_text(
+            "lockfileVersion: '1'\n"
+            "resolvedAt: '2026-01-01T00:00:00+00:00'\n"
+            "servers:\n"
+            "  srv:\n"
+            "    resolvedVersion: 1.0.0\n"
+        )
+        result = runner.invoke(app, ["lock", "--check", "--path", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "lockfile error" in result.output
+
+    def test_lock_check_json_output(self, tmp_path: Path) -> None:
+        config = tmp_path / ".mcp-manager.yml"
+        config.write_text("servers:\n  srv:\n    command: npx\n    args: [pkg@2.0.0]\n")
+        lockfile = tmp_path / ".mcp-manager.lock"
+        lockfile.write_text(
+            "lockfileVersion: '1'\n"
+            "resolvedAt: '2026-01-01T00:00:00+00:00'\n"
+            "servers:\n"
+            "  srv:\n"
+            "    resolvedVersion: 1.0.0\n"
+        )
+        result = runner.invoke(app, ["lock", "--check", "--path", str(tmp_path), "--json"])
+        assert result.exit_code == 1
+        assert '"errors"' in result.output
+
+    def test_lock_check_bad_lockfile(self, tmp_path: Path) -> None:
+        config = tmp_path / ".mcp-manager.yml"
+        config.write_text("servers:\n  srv:\n    command: npx\n    args: [pkg@1.0.0]\n")
+        lockfile = tmp_path / ".mcp-manager.lock"
+        lockfile.write_text("not: yaml: [")
+        result = runner.invoke(app, ["lock", "--check", "--path", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "Lockfile error" in result.output
+
+    def test_lock_config_error(self, tmp_path: Path) -> None:
+        config = tmp_path / ".mcp-manager.yml"
+        config.write_text("bad")
+        result = runner.invoke(app, ["lock", "--path", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "Config error" in result.output
