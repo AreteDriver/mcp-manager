@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **MCP Audit** (`mcp-manager audit` subcommand)
+  - `audit list` — list probe specs in a rich table
+  - `audit runbook` — generate markdown verification runbook for human-in-the-loop testing
+  - `audit serve` — start a benign FastMCP probe server for permission-prompt accuracy testing
+  - Built-in Category 3 baseline probe spec (8 probes for tool/parameter misrepresentation)
+  - Custom `--probe-spec` YAML support
+  - Ported from standalone `mcp-fuzz` project (ADL-20260721-003)
+
 ## [0.8.0] — 2026-07-20
 
 ### Added

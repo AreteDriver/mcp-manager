@@ -1,4 +1,4 @@
-# arete-mcp
+# mcp-manager
 
 **One CLI to discover, health-check, and sync MCP servers across Claude Code, Cursor, Windsurf, and more.**
 
@@ -181,6 +181,22 @@ mcp-manager monitor --project .
 - Graceful shutdown on Ctrl+C / SIGTERM
 - JSON status output: `mcp-manager monitor --json`
 
+### 🛡️ MCP Audit (Permission-Prompt Accuracy)
+Test whether your IDE's permission prompts faithfully display what MCP tools actually do — the only tool in the ecosystem that tests the **display layer**, not just the protocol layer.
+
+```bash
+# List built-in probe specs
+mcp-manager audit list
+
+# Generate a markdown runbook for manual verification
+mcp-manager audit runbook --output runbook.md
+
+# Start the benign probe MCP server
+mcp-manager audit serve
+```
+
+Built-in probes cover [HackerOne Category 3](https://hackerone.com/anthropic): tool/parameter misrepresentation in permission prompts. Each probe registers misleading metadata but returns a safe JSON marker — no actual behavior is executed. Supports custom `--probe-spec` YAML files for private threat models.
+
 ### 🔒 CI Gate / GitHub Action
 Validate `.mcp-manager.yml` on every PR:
 
@@ -324,6 +340,7 @@ Credentials are stored in `~/.mcp-manager/auth.json` with `0o600` permissions. Y
 - [x] Onboarding wizard (`mcp-manager init`)
 - [x] Project templates (`mcp-manager template list` / `use`)
 - [x] Private registry authentication (`registry login` / `logout` / `auth-list`)
+- [x] MCP permission-prompt accuracy auditing (`mcp-manager audit`)
 
 See [ROADMAP.md](ROADMAP.md) for what's next.
 

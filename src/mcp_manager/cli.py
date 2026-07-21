@@ -7,6 +7,11 @@ from pathlib import Path
 import typer
 
 from mcp_manager import __version__
+from mcp_manager.commands.audit_cmd import (
+    audit_list_impl,
+    audit_runbook_impl,
+    audit_serve_impl,
+)
 from mcp_manager.commands.auth_cmd import (
     _read_password_stdin,
     auth_list_impl,
@@ -66,6 +71,13 @@ app.add_typer(registry_app, name="registry")
 # Server sub-typer
 server_app = typer.Typer(name="server", help="Per-server management commands.")
 app.add_typer(server_app, name="server")
+
+# Audit sub-typer
+audit_app = typer.Typer(
+    name="audit",
+    help="MCP permission-prompt accuracy auditing.",
+)
+app.add_typer(audit_app, name="audit")
 
 
 @app.callback(invoke_without_command=True)
@@ -602,5 +614,48 @@ def marketplace_refresh (
     """Refresh quality scores for all marketplace servers."""
     try:
         marketplace_refresh_impl(output=output, timeout=timeout, dry_run=dry_run)
+    except McpManagerError:
+        raise typer.Exit(1) from None
+
+
+@audit_app.command(name="list")
+def audit_list(
+    probe_spec: Path | None = typer.Option(
+        None, "--probe-spec", help="Path to custom probe YAML spec."
+    ),
+) -> None:
+    """List probes available for auditing."""
+    try:
+        audit_list_impl(probe_spec=probe_spec)
+    except McpManagerError:
+        raise typer.Exit(1) from None
+
+
+@audit_app.command(name="runbook")
+def audit_runbook(
+    probe_spec: Path | None = typer.Option(
+        None, "--probe-spec", help="Path to custom probe YAML spec."
+    ),
+    output: Path | None = typer.Option(
+        None, "--output", "-o", help="Write runbook to file instead of stdout."
+    ),
+) -> None:
+    """Generate a markdown verification runbook."""
+    try:
+        audit_runbook_impl(probe_spec=probe_spec, output=output)
+    except McpManagerError:
+        raise typer.Exit(1) from None
+
+
+@audit_app.command(name="serve")
+def audit_serve(
+    probe_spec: Path | None = typer.Option(
+        None, "--probe-spec", help="Path to custom probe YAML spec."
+    ),
+    transport: str = typer.Option("stdio", "--transport", "-t", help="MCP transport: stdio|sse"),
+) -> None:
+    """Start the benign probe MCP server for manual verification."""
+    try:
+        audit_serve_impl(probe_spec=probe_spec, transport=transport)
     except McpManagerError:
         raise typer.Exit(1) from None
