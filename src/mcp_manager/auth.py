@@ -26,6 +26,7 @@ class AuthType(StrEnum):
 
     BEARER = "bearer"
     BASIC = "basic"
+    OAUTH2 = "oauth2"
 
 
 @dataclass(frozen=True)
@@ -36,16 +37,26 @@ class AuthProfile:
     token: str | None = None
     user: str | None = None
     password: str | None = None
+    refresh_token: str | None = None
+    expires_at: float | None = None
+    token_url: str | None = None
     added_at: float = field(default_factory=lambda: __import__("time").time())
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result: dict[str, Any] = {
             "type": self.type.value,
             "token": self.token,
             "user": self.user,
             "password": self.password,
             "added_at": self.added_at,
         }
+        if self.refresh_token is not None:
+            result["refresh_token"] = self.refresh_token
+        if self.expires_at is not None:
+            result["expires_at"] = self.expires_at
+        if self.token_url is not None:
+            result["token_url"] = self.token_url
+        return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuthProfile:
@@ -54,11 +65,14 @@ class AuthProfile:
             token=data.get("token"),
             user=data.get("user"),
             password=data.get("password"),
+            refresh_token=data.get("refresh_token"),
+            expires_at=data.get("expires_at"),
+            token_url=data.get("token_url"),
             added_at=data.get("added_at", 0.0),
         )
 
     def to_headers(self) -> dict[str, str]:
-        if self.type == AuthType.BEARER and self.token:
+        if self.type in (AuthType.BEARER, AuthType.OAUTH2) and self.token:
             return {"Authorization": f"Bearer {self.token}"}
         if self.type == AuthType.BASIC and self.user and self.password:
             import base64
