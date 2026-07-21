@@ -4,10 +4,28 @@
 
 [![CI](https://github.com/AreteDriver/mcp-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/AreteDriver/mcp-manager/actions)
 [![CodeQL](https://github.com/AreteDriver/mcp-manager/actions/workflows/codeql.yml/badge.svg)](https://github.com/AreteDriver/mcp-manager/actions)
-[![Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen.svg)](https://github.com/AreteDriver/mcp-manager/actions)
+[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)](https://github.com/AreteDriver/mcp-manager/actions)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![PyPI](https://img.shields.io/badge/PyPI-arete--mcp-blue)](https://pypi.org/project/arete-mcp/)
+[![PyPI](https://img.shields.io/pypi/v/arete-mcp.svg)](https://pypi.org/project/arete-mcp/)
+[![Downloads](https://img.shields.io/pypi/dm/arete-mcp.svg)](https://pypi.org/project/arete-mcp/)
+
+Think of it as **docker-compose for MCP** — a single `.mcp-manager.yml` in your repo that describes which AI tools your project needs, with one command to sync them to every IDE your team uses.
+
+---
+
+## Why mcp-manager?
+
+The Model Context Protocol (MCP) is the open standard for connecting AI agents to external tools — databases, browsers, filesystems, APIs. But every IDE stores MCP configs differently, and there's no way to share them across a team.
+
+**mcp-manager gives you:**
+
+- **One config file** (`.mcp-manager.yml`) committed with your code
+- **One command** to sync it to every IDE (`mcp-manager sync --ide cursor`)
+- **Health checks** that verify servers actually work, not just "start"
+- **Team onboarding** with `mcp-manager init` — detects IDE, imports servers, scaffolds config
+
+No more manual copy-paste. No more "works on my machine" for AI tool configs.
 
 ---
 
@@ -51,7 +69,20 @@ mcp-manager sync --ide cursor
 
 ## What Makes This Different
 
-|  | **arete-mcp** | Other Managers |
+### vs. Manual IDE Config
+
+| | **mcp-manager** | **Manual Config** |
+|---|---|---|
+| **Share via git** | ✅ `.mcp-manager.yml` committed with code | ❌ Per-IDE JSON scattered in home dirs |
+| **Switch projects** | ✅ One command: `mcp-manager sync --ide cursor` | ❌ Manual copy-paste between configs |
+| **Team onboarding** | ✅ `mcp-manager init` detects IDE + imports | ❌ Everyone configures manually |
+| **Health verification** | ✅ Deep checks: tools/list, deps on PATH | ❌ "Looks like it started" |
+| **Rollback** | ✅ Atomic write + backup | ❌ Direct overwrite |
+| **CI gate** | ✅ `mcp-manager validate --strict` | ❌ Nothing |
+
+### vs. Other MCP Managers
+
+| | **mcp-manager** | **Other Managers** |
 |---|---|---|
 | **Config lives in repo** | ✅ `.mcp-manager.yml` committed with your code | ❌ Global per-IDE JSON files |
 | **Atomic write-back** | ✅ Backups + dry-run before touching IDE configs | ❌ Direct overwrite, no rollback |
@@ -252,7 +283,11 @@ mcp-manager lock --check            # Validate lockfile is current (CI gate)
 - [x] Server auto-restart monitor
 - [x] CI gate (`mcp-manager validate` + GitHub Action)
 - [x] Version pinning lockfile (`mcp-manager lock --check`)
-- [ ] Server marketplace / remote registry
+- [x] Server marketplace / remote registry
+- [x] Config inheritance (`extends:`) for shared team configs
+- [x] Server tags with `--tag` / `--exclude-tag` filters
+- [x] Onboarding wizard (`mcp-manager init`)
+- [x] Project templates (`mcp-manager template list` / `use`)
 
 See [ROADMAP.md](ROADMAP.md) for what's next.
 
