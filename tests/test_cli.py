@@ -513,7 +513,7 @@ class TestStatsCommand:
 class TestSyncCommand:
     def test_sync_dry_run(self) -> None:
         servers = _sample_servers()
-        with patch("mcp_manager.commands.servers._discover", return_value=servers):
+        with patch("mcp_manager.commands.ops._discover", return_value=servers):
             mock_wb = MagicMock()
             mock_wb.preview.return_value = {"cursor": "preview"}
             with patch("mcp_manager.writeback.ConfigWriteback", return_value=mock_wb):
