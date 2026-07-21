@@ -11,6 +11,7 @@ from mcp_manager.commands.auth_cmd import (
     _read_password_stdin,
     auth_list_impl,
     login_impl,
+    login_oauth2_impl,
     logout_impl,
 )
 from mcp_manager.commands.common import console
@@ -520,6 +521,15 @@ def registry_login(
     pw_stdin: bool = typer.Option(
         False, "--password-stdin", help="Read password from stdin (secure)."
     ),
+    oauth2: bool = typer.Option(
+        False, "--oauth2", help="Force OAuth2 device flow login."
+    ),
+    no_oauth2: bool = typer.Option(
+        False, "--no-oauth2", help="Skip OAuth2 discovery, use token or auth."
+    ),
+    client_id: str | None = typer.Option(
+        None, "--client-id", help="Override default OAuth2 client ID (rarely needed)."
+    ),
 ) -> None:
     """Store credentials for a private registry.
 
@@ -543,7 +553,20 @@ def registry_login(
             "Use --password-stdin instead."
         )
     try:
-        login_impl(url=url, token=token, user=user, password=effective_pw)
+        if oauth2:
+            login_oauth2_impl(url=url, client_id=client_id)
+        elif no_oauth2:
+            login_impl(url=url, token=token, user=user, password=effective_pw)
+        else:
+            # Auto-detect: try OAuth2 discovery
+            from mcp_manager.oauth2 import discover_oauth2_endpoints
+            if discover_oauth2_endpoints(url):
+                console.print(
+                    "[green]Registry supports OAuth2 device flow.[/green] "
+                    "Use --oauth2 to login interactively, or --no-oauth2 to skip."
+                )
+                raise typer.Exit(1)
+            login_impl(url=url, token=token, user=user, password=effective_pw)
     except McpManagerError:
         raise typer.Exit(1) from None
 

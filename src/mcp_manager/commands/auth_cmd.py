@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 
 import httpx
@@ -9,7 +10,73 @@ import httpx
 from mcp_manager.auth import AuthProfile, AuthStore, AuthType
 from mcp_manager.commands.common import console
 from mcp_manager.exceptions import McpManagerError
+from mcp_manager.oauth2 import OAuth2DeviceFlow, discover_oauth2_endpoints
 from mcp_manager.telemetry import track_command
+
+logger = logging.getLogger(__name__)
+
+def login_oauth2_impl(url: str, client_id: str | None = None) -> None:
+    """Perform OAuth2 device flow login for a registry URL."""
+    track_command("registry_login_oauth2")
+
+    console.print(f"[dim]Discovering OAuth2 endpoints for {url}...[/dim]")
+    endpoints = discover_oauth2_endpoints(url)
+    if endpoints is None:
+        console.print(f"[red]OAuth2 device flow is not available for {url}.[/red]")
+        console.print("[dim]The registry did not advertise device flow support in its")
+        console.print("manifest or .well-known/oauth-authorization-server endpoint.[/dim]")
+        raise McpManagerError(f"OAuth2 device flow not available for {url}")
+
+    # Initiate device flow
+    flow = OAuth2DeviceFlow(
+        device_auth_url=endpoints.device_authorization,
+        token_url=endpoints.token,
+        client_id=client_id or "mcp-manager-cli",
+    )
+
+    console.print("[dim]Requesting device code from registry...[/dim]")
+    device = flow.request_device_code()
+
+    console.print("[bold]Registry supports OAuth2 device flow.[/bold]")
+    console.print(f"1. Visit:  [cyan]{device.verification_uri}[/cyan]")
+    console.print(f"2. Enter code: [bold]{device.user_code}[/bold]")
+    console.print("3. Click 'Authorize'")
+    console.print("[dim]Waiting for authorization...[/dim]")
+
+    token_resp = flow.poll_token(device.device_code, interval=device.interval)
+
+    # Build profile
+    expires_at = None
+    if token_resp.expires_in is not None:
+        import time as _time
+        expires_at = _time.time() + token_resp.expires_in
+
+    profile = AuthProfile(
+        type=AuthType.OAUTH2,
+        token=token_resp.access_token,
+        refresh_token=token_resp.refresh_token,
+        expires_at=expires_at,
+        token_url=endpoints.token,
+    )
+
+    store = AuthStore()
+    store.load()
+
+    existing = store.get(url)
+    if existing:
+        console.print(f"[yellow]Overwriting existing credentials for {url}[/yellow]")
+
+    store.add(url, profile)
+    store.save()
+
+    ok, msg = store.check_permissions()
+    if not ok:
+        console.print(f"[yellow]{msg}[/yellow]")
+
+    expiry_str = ""
+    if token_resp.expires_in is not None:
+        expiry_str = f" (expires in {token_resp.expires_in // 3600}h)"
+    console.print(f"[green]Logged in to {url} via OAuth2[/green]{expiry_str}")
 
 
 def login_impl(
@@ -94,6 +161,23 @@ def _validate_credentials(url: str, profile: AuthProfile) -> None:
         )
 
 
+def _revoke_token(token: str, token_url: str) -> bool:
+    """Attempt to revoke a token via RFC 7009. Returns True on success."""
+    import httpx
+    payload = {
+        "token": token,
+        "token_type_hint": "access_token",
+    }
+    try:
+        resp = httpx.post(token_url, data=payload, timeout=10)
+        if resp.status_code in (200, 204):
+            return True
+        logger.debug("Token revocation returned HTTP %s: %s", resp.status_code, resp.text)
+    except httpx.HTTPError as exc:
+        logger.debug("Token revocation failed: %s", exc)
+    return False
+
+
 def logout_impl(url: str) -> None:
     """Remove stored authentication for a registry URL."""
     track_command("registry_logout")
@@ -101,11 +185,23 @@ def logout_impl(url: str) -> None:
     store = AuthStore()
     store.load()
 
-    if store.remove(url):
-        store.save()
-        console.print(f"[green]Removed credentials for {url}[/green]")
-    else:
+    profile = store.get(url)
+    if profile is None:
         console.print(f"[yellow]No credentials found for {url}[/yellow]")
+        return
+
+    # Attempt token revocation for OAuth2 profiles
+    if profile.type == AuthType.OAUTH2 and profile.token and profile.token_url:
+        revoked = _revoke_token(profile.token, profile.token_url)
+        if revoked:
+            console.print("[dim]Revoked token on server...[/dim] ✅")
+        else:
+            console.print("[yellow]Warning:[/yellow] server does not support token revocation.")
+            console.print("[dim]Token may remain valid on server until expiry.[/dim]")
+
+    store.remove(url)
+    store.save()
+    console.print(f"[green]Removed credentials for {url}[/green]")
 
 
 def _read_password_stdin() -> str | None:
