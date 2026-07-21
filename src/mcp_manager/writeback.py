@@ -26,9 +26,14 @@ class ConfigWriteback:
     """Write server configurations back to IDE config files."""
 
     def __init__(self) -> None:
-        self._ide_configs: dict[str, tuple[Path, str | None]] = {}
+        self._ide_configs: dict[str, tuple[str, str | None]] = {}
         for tool_name, path_str, wrapper_key in IDE_CONFIG_PATHS:
-            self._ide_configs[tool_name] = (Path(path_str).expanduser(), wrapper_key)
+            self._ide_configs[tool_name] = (path_str, wrapper_key)
+
+    def _resolve(self, ide: str) -> tuple[Path, str | None]:
+        """Return the expanded config path and wrapper key for an IDE."""
+        path_str, wrapper_key = self._ide_configs[ide]
+        return Path(path_str).expanduser(), wrapper_key
 
     # ------------------------------------------------------------------
     # Public API
@@ -42,7 +47,7 @@ class ConfigWriteback:
         """Return the expected config path for an IDE, or None if unknown."""
         info = self._ide_configs.get(ide)
         if info:
-            return info[0]
+            return Path(info[0]).expanduser()
         return None
 
     def write_servers(
@@ -70,7 +75,7 @@ class ConfigWriteback:
         if ide not in self._ide_configs:
             raise WritebackError(f"Unknown IDE: {ide}. Supported: {self.get_supported_ides()}")
 
-        config_path, wrapper_key = self._ide_configs[ide]
+        config_path, wrapper_key = self._resolve(ide)
 
         if not config_path.exists():
             if not create_if_missing and not dry_run:
@@ -84,7 +89,7 @@ class ConfigWriteback:
         if ide not in self._ide_configs:
             raise WritebackError(f"Unknown IDE: {ide}. Supported: {self.get_supported_ides()}")
 
-        config_path, wrapper_key = self._ide_configs[ide]
+        config_path, wrapper_key = self._resolve(ide)
 
         if not config_path.exists():
             return self._build_new_dict(wrapper_key, servers)
@@ -114,7 +119,7 @@ class ConfigWriteback:
         if ide not in self._ide_configs:
             raise WritebackError(f"Unknown IDE: {ide}. Supported: {self.get_supported_ides()}")
 
-        config_path, wrapper_key = self._ide_configs[ide]
+        config_path, wrapper_key = self._resolve(ide)
 
         if not config_path.exists():
             return (config_path, [])

@@ -83,11 +83,12 @@ class ServerRegistry:
         return [self._entries[k] for k in sorted(self._entries)]
 
     def update_health(self, name: str, result: HealthResult) -> None:
-        """Update the last health check for a server and persist."""
+        """Update the last health check for a server in memory.
+
+        Callers must invoke ``save()`` explicitly when they want to persist."""
         entry = self._entries.get(name)
         if entry:
             entry.last_health = result
-            self.save()
 
     def __len__(self) -> int:
         return len(self._entries)
