@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-07-20
+
+### Added
+
+- **OAuth2 Device Flow** (mcp-manager registry login --oauth2)
+  - RFC 8628 device flow with auto-discovery from MCP manifest or .well-known/oauth-authorization-server
+  - Polling loop with authorization_pending, slow_down, access_denied handling
+  - Token refresh before expiry on every registry operation
+  - --client-id override for enterprise registries
+- **Token revocation on logout** — attempts RFC 7009 revocation if endpoint advertised
+- **Auth-list expiry column** — shows hours remaining or expired for OAuth2 profiles
+
 ## [0.7.1] — 2026-07-20
 
 ### Fixed
