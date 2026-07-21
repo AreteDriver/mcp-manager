@@ -530,6 +530,13 @@ def registry_login(
     [cyan]MCP_MANAGER_REGISTRY_USER[/cyan] env vars.
     """
     effective_pw = _read_password_stdin() if pw_stdin else pw
+    if pw_stdin and effective_pw is None:
+        console.print(
+            "[red]Error:[/red] --password-stdin requires piped input.\n"
+            "[dim]Example: echo \x27secret\x27 | mcp-manager registry login "
+            f"{url} --user alice --password-stdin[/dim]"
+        )
+        raise typer.Exit(1)
     if pw:
         console.print(
             "[yellow]Warning:[/yellow] --password is deprecated and insecure. "

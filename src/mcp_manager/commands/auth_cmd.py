@@ -27,7 +27,8 @@ def login_impl(
         profile = AuthProfile(type=AuthType.BASIC, user=user, password=password)
     else:
         console.print(
-            "[red]Provide --token (Bearer) or --user + --password (Basic).[/red]"
+            "[red]Provide --token (Bearer) or --user + --password (Basic).[/red]\n"
+            "[dim]Use --password-stdin for secure password entry.[/dim]"
         )
         raise McpManagerError("Provide --token or --user + --password")
 
@@ -70,7 +71,7 @@ def _validate_credentials(url: str, profile: AuthProfile) -> None:
         return  # Nothing to validate.
 
     try:
-        resp = httpx.head(url, headers=headers, timeout=10, follow_redirects=True)
+        resp = httpx.head(url, headers=headers, timeout=10, follow_redirects=False)
     except httpx.HTTPError as exc:
         console.print(f"[yellow]Warning: could not validate credentials: {exc}[/yellow]")
         return

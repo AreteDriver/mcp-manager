@@ -136,6 +136,17 @@ def health_impl(
     checker = HealthChecker(timeout=timeout, deep=deep)
     results = asyncio.run(checker.check_all(servers))
 
+    # Persist health results to the mcp-manager registry.
+    reg = _get_registry()
+    reg.load()
+    updated = False
+    for r in results:
+        if r.server_name in reg:
+            reg.update_health(r.server_name, r)
+            updated = True
+    if updated:
+        reg.save()
+
     if json:
         data = [r.model_dump(mode="json", exclude_none=True) for r in results]
         console.print_json(json_mod.dumps(data, indent=2))
