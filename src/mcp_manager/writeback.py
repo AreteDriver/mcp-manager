@@ -84,6 +84,53 @@ class ConfigWriteback:
 
         return self._build_updated_dict(config_path, wrapper_key, servers)
 
+    def remove_servers(
+        self,
+        ide: str,
+        server_names: set[str],
+        *,
+        dry_run: bool = False,
+    ) -> tuple[Path, list[str]]:
+        """Remove servers from an IDE config by name.
+
+        Args:
+            ide: IDE/tool name.
+            server_names: Set of server names to remove.
+            dry_run: If True, compute result but do not write.
+
+        Returns:
+            Tuple of (config_path, list of actually removed names).
+
+        Raises:
+            WritebackError: If the IDE is unknown or writing fails.
+        """
+        if ide not in self._ide_configs:
+            raise WritebackError(f"Unknown IDE: {ide}. Supported: {self.get_supported_ides()}")
+
+        config_path, wrapper_key = self._ide_configs[ide]
+
+        if not config_path.exists():
+            return (config_path, [])
+
+        data = self._build_dict_without_servers(config_path, wrapper_key, server_names)
+        removed = self._removed_names
+
+        if dry_run:
+            logger.info("[dry-run] Would remove %s from %s", removed, config_path)
+            return (config_path, removed)
+
+        if not removed:
+            return (config_path, [])
+
+        backup_path = config_path.with_suffix(config_path.suffix + _BACKUP_SUFFIX)
+        try:
+            shutil.copy2(config_path, backup_path)
+        except OSError as exc:
+            raise WritebackError(f"Failed to create backup at {backup_path}: {exc}") from exc
+
+        self._atomic_write(config_path, data)
+        return (config_path, removed)
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -175,6 +222,40 @@ class ConfigWriteback:
             for s in servers:
                 data[s.name] = _server_to_ide_dict(s)
 
+        return data
+
+    def _build_dict_without_servers(
+        self,
+        config_path: Path,
+        wrapper_key: str | None,
+        server_names: set[str],
+    ) -> dict[str, Any]:
+        """Return a copy of the IDE config with specified server names removed."""
+        try:
+            text = config_path.read_text(encoding="utf-8")
+            data: dict[str, Any] = json.loads(text)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise WritebackError(f"Cannot read or parse {config_path}: {exc}") from exc
+
+        if not isinstance(data, dict):
+            raise WritebackError(f"Config file {config_path} must contain a JSON object")
+
+        removed: list[str] = []
+
+        if wrapper_key is not None:
+            existing = data.get(wrapper_key, {})
+            if isinstance(existing, dict):
+                for name in list(existing):
+                    if name in server_names:
+                        del existing[name]
+                        removed.append(name)
+        else:
+            for name in list(data):
+                if name in server_names:
+                    del data[name]
+                    removed.append(name)
+
+        self._removed_names = removed
         return data
 
     def _atomic_write(self, path: Path, data: dict[str, Any]) -> None:

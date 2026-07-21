@@ -40,6 +40,7 @@ from mcp_manager.commands.templates_cmd import (
     template_list_impl,
     template_use_impl,
 )
+from mcp_manager.commands.uninstall import uninstall_impl
 from mcp_manager.exceptions import McpManagerError
 
 app = typer.Typer(
@@ -456,6 +457,39 @@ def server_install(
             dry_run=dry_run,
             force=force,
             verify=verify,
+            project=project,
+        )
+    except McpManagerError:
+        raise typer.Exit(1) from None
+
+
+@server_app.command(name="uninstall")
+def server_uninstall(
+    name: str = typer.Argument(..., help="Server name to uninstall."),
+    ide: str | None = typer.Option(
+        None, "--ide", "-i", help="Target IDE (cursor, claude-code, windsurf)."
+    ),
+    all_ides: bool = typer.Option(
+        False, "--all", help="Uninstall from all IDEs that have it."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview changes without writing."
+    ),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Uninstall even if server is healthy."
+    ),
+    project: Path | None = typer.Option(
+        None, "--project", "-p", help="Project dir for discovery scope."
+    ),
+) -> None:
+    """Uninstall a server from IDE config(s)."""
+    try:
+        uninstall_impl(
+            name=name,
+            ide=ide,
+            all_ides=all_ides,
+            dry_run=dry_run,
+            force=force,
             project=project,
         )
     except McpManagerError:
