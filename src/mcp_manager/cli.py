@@ -7,7 +7,12 @@ from pathlib import Path
 import typer
 
 from mcp_manager import __version__
-from mcp_manager.commands.auth_cmd import auth_list_impl, login_impl, logout_impl
+from mcp_manager.commands.auth_cmd import (
+    _read_password_stdin,
+    auth_list_impl,
+    login_impl,
+    logout_impl,
+)
 from mcp_manager.commands.common import console
 from mcp_manager.commands.init_wizard import init_wizard_impl
 from mcp_manager.commands.install import install_impl
@@ -507,8 +512,13 @@ def registry_login(
     user: str | None = typer.Option(
         None, "--user", "-u", help="Username for basic auth."
     ),
-    password: str | None = typer.Option(
-        None, "--password", help="password for basic auth."
+    pw: str | None = typer.Option(
+        None,
+        "--password",
+        help="password for basic auth. [yellow]Deprecated[/yellow]: use --password-stdin instead.",
+    ),
+    pw_stdin: bool = typer.Option(
+        False, "--password-stdin", help="Read password from stdin (secure)."
     ),
 ) -> None:
     """Store credentials for a private registry.
@@ -519,8 +529,14 @@ def registry_login(
     set [cyan]MCP_MANAGER_REGISTRY_TOKEN[/cyan] /
     [cyan]MCP_MANAGER_REGISTRY_USER[/cyan] env vars.
     """
+    effective_pw = _read_password_stdin() if pw_stdin else pw
+    if pw:
+        console.print(
+            "[yellow]Warning:[/yellow] --password is deprecated and insecure. "
+            "Use --password-stdin instead."
+        )
     try:
-        login_impl(url=url, token=token, user=user, password=password)
+        login_impl(url=url, token=token, user=user, password=effective_pw)
     except McpManagerError:
         raise typer.Exit(1) from None
 

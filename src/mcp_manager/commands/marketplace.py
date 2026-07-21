@@ -40,7 +40,7 @@ def search_marketplace_impl(
             "query": query,
             "category": category or None,
             "verified_only": not include_unverified,
-            "servers": [s.to_dict() for s in results],
+            "servers": [s.model_dump(mode="json") for s in results],
         }
         console.print_json(json_mod.dumps(data, indent=2))
         return
@@ -88,13 +88,13 @@ def marketplace_info_impl(name: str, json: bool) -> None:  # noqa: A002
         raise McpManagerError(f"Server not found: {name}")
 
     if json:
-        console.print_json(json_mod.dumps(server.to_dict(), indent=2))
+        console.print_json(json_mod.dumps(server.model_dump(mode="json"), indent=2))
         return
 
     console.print(f"[bold]{server.display_name}[/bold]")
     console.print(f"  Name:       {server.name}")
     console.print(f"  Repository: {server.repository}")
-    console.print(f"  License:    {server.quality.license_id}")
+    console.print(f"  License:    {server.quality.license}")
     console.print(f"  Verified:   {'✅' if server.quality.verified else '⬜'}")
     console.print(f"  Health:     {server.quality.health_pass_rate:.0%}")
     console.print(f"  Tools:      {server.quality.tool_count}")

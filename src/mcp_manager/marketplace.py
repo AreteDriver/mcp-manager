@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import BaseModel, Field
 
 from mcp_manager.models import StdioConfig
 from mcp_manager.project_config import DEFAULT_FILENAME
@@ -16,86 +17,26 @@ from mcp_manager.project_config import DEFAULT_FILENAME
 # ---------------------------------------------------------------------------
 
 
-class QualityScore:
+class QualityScore(BaseModel):
     """Computed quality metrics for a marketplace server."""
 
-    def __init__(
-        self,
-        health_pass_rate: float = 0.0,
-        tool_count: int = 0,
-        last_updated: str | None = None,
-        license_id: str = "",
-        verified: bool = False,
-    ) -> None:
-        self.health_pass_rate = health_pass_rate
-        self.tool_count = tool_count
-        self.last_updated = last_updated
-        self.license_id = license_id
-        self.verified = verified
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "health_pass_rate": self.health_pass_rate,
-            "tool_count": self.tool_count,
-            "last_updated": self.last_updated,
-            "license": self.license_id,
-            "verified": self.verified,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> QualityScore:
-        return cls(
-            health_pass_rate=float(data.get("health_pass_rate", 0.0)),
-            tool_count=int(data.get("tool_count", 0)),
-            last_updated=data.get("last_updated"),
-            license_id=str(data.get("license", "")),
-            verified=bool(data.get("verified", False)),
-        )
+    health_pass_rate: float = 0.0
+    tool_count: int = 0
+    last_updated: str | None = None
+    license: str = ""
+    verified: bool = False
 
 
-class MarketplaceServer:
+class MarketplaceServer(BaseModel):
     """A single entry in the MCP server marketplace."""
 
-    def __init__(
-        self,
-        name: str,
-        display_name: str,
-        description: str,
-        repository: str,
-        categories: list[str],
-        install_spec: dict[str, Any],
-        quality: QualityScore,
-    ) -> None:
-        self.name = name
-        self.display_name = display_name
-        self.description = description
-        self.repository = repository
-        self.categories = categories
-        self.install_spec = install_spec
-        self.quality = quality
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "display_name": self.display_name,
-            "description": self.description,
-            "repository": self.repository,
-            "categories": self.categories,
-            "install_spec": self.install_spec,
-            "quality": self.quality.to_dict(),
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> MarketplaceServer:
-        return cls(
-            name=str(data["name"]),
-            display_name=str(data.get("display_name", data["name"])),
-            description=str(data.get("description", "")),
-            repository=str(data.get("repository", "")),
-            categories=list(data.get("categories", [])),
-            install_spec=dict(data.get("install_spec", {})),
-            quality=QualityScore.from_dict(data.get("quality", {})),
-        )
+    name: str
+    display_name: str = ""
+    description: str = ""
+    repository: str = ""
+    categories: list[str] = Field(default_factory=list)
+    install_spec: dict[str, Any] = Field(default_factory=dict)
+    quality: QualityScore = Field(default_factory=QualityScore)
 
     def _env_var_placeholders(self) -> list[str]:
         """Return list of ${VAR} env var names in install_spec."""
@@ -206,7 +147,7 @@ def load_index(path: Path | None = None) -> MarketplaceIndex:
         raise MarketplaceError("Marketplace index must be a YAML mapping")
 
     categories = [dict(c) for c in raw.get("categories", [])]
-    servers = [MarketplaceServer.from_dict(s) for s in raw.get("servers", [])]
+    servers = [MarketplaceServer.model_validate(s) for s in raw.get("servers", [])]
     return MarketplaceIndex(categories=categories, servers=servers)
 
 
@@ -374,7 +315,7 @@ def _write_index(path: Path, index: MarketplaceIndex) -> None:
     """Persist a MarketplaceIndex back to disk."""
     data = {
         "categories": index.categories,
-        "servers": [s.to_dict() for s in index.servers.values()],
+        "servers": [s.model_dump(mode="json") for s in index.servers.values()],
     }
     try:
         text = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)

@@ -26,6 +26,8 @@ PROJECT_CONFIG_TOOL = "project"
 # ---------------------------------------------------------------------------
 # mcp-manager own paths.
 # ---------------------------------------------------------------------------
+
+
 MANAGER_CONFIG_DIR: Path = Path("~/.mcp-manager").expanduser()
 MANAGER_REGISTRY_FILE: Path = MANAGER_CONFIG_DIR / "registry.json"
 

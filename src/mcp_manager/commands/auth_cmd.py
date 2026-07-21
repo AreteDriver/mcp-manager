@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import httpx
 
 from mcp_manager.auth import AuthProfile, AuthStore, AuthType
@@ -103,6 +105,24 @@ def logout_impl(url: str) -> None:
         console.print(f"[green]Removed credentials for {url}[/green]")
     else:
         console.print(f"[yellow]No credentials found for {url}[/yellow]")
+
+
+def _read_password_stdin() -> str | None:
+    """Read a single line from stdin and return it stripped.
+
+    Returns None if stdin is a tty (no piped input) or empty.
+    """
+    if sys.stdin.isatty():
+        return None
+    try:
+        return sys.stdin.readline().strip()
+    except OSError:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Public commands
+# ---------------------------------------------------------------------------
 
 
 def auth_list_impl() -> None:
