@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-07-20
+
+### Added
+
+- **Remote Registry Sync** (`mcp-manager registry diff`, `mcp-manager registry pull`)
+  - Fetch server definitions from remote YAML/JSON registries over HTTP
+  - Diff preview with Rich table (add / change / remove)
+  - Merge strategies: `union` (default) and `replace`
+  - Pre-pull verification with `mcp-manager registry pull --verify`
+  - Dry-run support on both diff and pull
+  - Atomic writes with backups via `write_project_servers`
+- **Registry Authentication** — `--token` (Bearer), `--user` + `--password` (Basic), `--header` (repeatable custom headers)
+- **One-Command Server Install** (`mcp-manager server install <name>`)
+  - Install a single server from local registry into IDE configs
+  - Auto-detect existing IDE configs, or target specific IDE with `--ide`
+  - `--all` + `--create` to write to all supported IDEs even if config missing
+  - `--force` to overwrite existing entries
+  - Optional `--verify` health check after install
+- **One-Command Server Uninstall** (`mcp-manager server uninstall <name>`)
+  - Remove a server from IDE configs by discovery (no registry lookup needed)
+  - Health warning before uninstall unless `--force`
+  - Target single IDE or all IDEs that have the server
+- **ConfigWriteback.remove_servers()** — atomic backup + removal by name, supports wrapper-key and top-level configs
+
+### Changed
+
+- **CLI architecture** — added `server_app` sub-typer under `mcp-manager server` for per-server lifecycle commands
+
 ## [0.5.0] — 2026-07-20
 
 ### Added

@@ -99,6 +99,127 @@ class TestRegistryDiff:
         assert result.exit_code == 1
         assert "Project config not found" in result.output
 
+    def test_diff_with_token(self, tmp_path: Path) -> None:
+        """Bearer token is passed via Authorization header."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        _make_project_file(project_dir / ".mcp-manager.yml")
+
+        registry = tmp_path / "registry.yaml"
+        _make_registry_file(registry)
+
+        with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = registry.read_text()
+            mock_get.return_value.raise_for_status = lambda: None
+
+            result = runner.invoke(
+                app,
+                [
+                    "registry",
+                    "diff",
+                    str(registry),
+                    "--project-dir",
+                    str(project_dir),
+                    "--token",
+                    "sekrit",
+                ],
+            )
+
+        assert result.exit_code == 0
+        _, kwargs = mock_get.call_args
+        assert kwargs["headers"]["Authorization"] == "Bearer sekrit"
+
+    def test_diff_with_basic_auth(self, tmp_path: Path) -> None:
+        """User + password produces Basic auth header."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        _make_project_file(project_dir / ".mcp-manager.yml")
+
+        registry = tmp_path / "registry.yaml"
+        _make_registry_file(registry)
+
+        with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = registry.read_text()
+            mock_get.return_value.raise_for_status = lambda: None
+
+            result = runner.invoke(
+                app,
+                [
+                    "registry",
+                    "diff",
+                    str(registry),
+                    "--project-dir",
+                    str(project_dir),
+                    "--user",
+                    "alice",
+                    "--password",
+                    "wonderland",
+                ],
+            )
+
+        assert result.exit_code == 0
+        _, kwargs = mock_get.call_args
+        import base64
+        expected = base64.b64encode(b"alice:wonderland").decode()
+        assert kwargs["headers"]["Authorization"] == f"Basic {expected}"
+
+    def test_diff_with_custom_header(self, tmp_path: Path) -> None:
+        """Custom headers are forwarded."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        _make_project_file(project_dir / ".mcp-manager.yml")
+
+        registry = tmp_path / "registry.yaml"
+        _make_registry_file(registry)
+
+        with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = registry.read_text()
+            mock_get.return_value.raise_for_status = lambda: None
+
+            result = runner.invoke(
+                app,
+                [
+                    "registry",
+                    "diff",
+                    str(registry),
+                    "--project-dir",
+                    str(project_dir),
+                    "--header",
+                    "X-Custom:foo",
+                    "--header",
+                    "X-Another:bar",
+                ],
+            )
+
+        assert result.exit_code == 0
+        _, kwargs = mock_get.call_args
+        assert kwargs["headers"]["X-Custom"] == "foo"
+        assert kwargs["headers"]["X-Another"] == "bar"
+
+    def test_diff_invalid_header_format(self, tmp_path: Path) -> None:
+        """Missing colon in --header causes a clear error."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        _make_project_file(project_dir / ".mcp-manager.yml")
+
+        result = runner.invoke(
+            app,
+            [
+                "registry",
+                "diff",
+                "https://example.com/reg.yaml",
+                "--project-dir",
+                str(project_dir),
+                "--header",
+                "badformat",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "Invalid header" in result.output
+
 
 class TestRegistryPull:
     """Tests for `mcp-manager registry pull`."""

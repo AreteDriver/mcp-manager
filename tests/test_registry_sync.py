@@ -98,6 +98,25 @@ class TestFetchRemoteServers:
         ):
             fetch_remote_servers("https://example.com/registry.yaml")
 
+    def test_fetch_with_headers(self, tmp_path: Path) -> None:
+        """Custom headers are forwarded to httpx.get."""
+        registry = tmp_path / "registry.yaml"
+        registry.write_text(yaml.dump({"servers": {"srv": {"command": "npx"}}}))
+
+        with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = registry.read_text()
+            mock_get.return_value.raise_for_status = lambda: None
+
+            fetch_remote_servers(
+                "https://example.com/registry.yaml",
+                headers={"Authorization": "Bearer tok", "X-Custom": "val"},
+            )
+
+        _, kwargs = mock_get.call_args
+        assert kwargs["headers"]["Authorization"] == "Bearer tok"
+        assert kwargs["headers"]["X-Custom"] == "val"
+
     def test_fetch_invalid_yaml(self) -> None:
         with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
             mock_get.return_value.status_code = 200

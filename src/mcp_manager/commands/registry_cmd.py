@@ -22,10 +22,51 @@ from mcp_manager.registry_sync import (
 registry_app = typer.Typer(name="registry", help="Remote registry sync commands.")
 
 
+def _build_headers(
+    token: str | None,
+    header: list[str] | None,
+    user: str | None,
+    password: str | None,
+) -> dict[str, str] | None:
+    """Build HTTP headers from CLI auth options."""
+    headers: dict[str, str] = {}
+
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    if user and password:
+        import base64
+        credentials = base64.b64encode(f"{user}:{password}".encode()).decode()
+        headers["Authorization"] = f"Basic {credentials}"
+
+    if header:
+        for h in header:
+            if ":" not in h:
+                raise ValueError(f"Invalid header format (expected 'Key:Value'): {h}")
+            key, value = h.split(":", 1)
+            headers[key.strip()] = value.strip()
+
+    return headers if headers else None
+
+
 @registry_app.command(name="diff")
 def registry_diff(
     url: str = typer.Argument(..., help="URL to remote registry YAML/JSON."),
-    project_dir: Path | None = typer.Option(None, "--project-dir", "-p", help="Project directory."),
+    project_dir: Path | None = typer.Option(
+        None, "--project-dir", "-p", help="Project directory."
+    ),
+    token: str | None = typer.Option(
+        None, "--token", "-t", help="Bearer token for authentication."
+    ),
+    header: list[str] | None = typer.Option(
+        None, "--header", "-H", help="Custom header (repeatable)."
+    ),
+    user: str | None = typer.Option(
+        None, "--user", "-u", help="Username for basic auth."
+    ),
+    password: str | None = typer.Option(
+        None, "--password", help="Password for basic auth."
+    ),
 ) -> None:
     """Preview changes from a remote registry without applying them."""
     from mcp_manager.telemetry import track_command
@@ -45,7 +86,13 @@ def registry_diff(
         raise typer.Exit(1) from exc
 
     try:
-        remote = fetch_remote_servers(url)
+        auth_headers = _build_headers(token, header, user, password)
+    except ValueError as exc:
+        console.print(f"[red]Invalid header:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    try:
+        remote = fetch_remote_servers(url, headers=auth_headers)
     except McpManagerError as exc:
         console.print(f"[red]Failed to fetch registry:[/red] {exc}")
         raise typer.Exit(1) from exc
@@ -80,11 +127,29 @@ def registry_diff(
 @registry_app.command(name="pull")
 def registry_pull(
     url: str = typer.Argument(..., help="URL to remote registry YAML/JSON."),
-    project_dir: Path | None = typer.Option(None, "--project-dir", "-p", help="Project directory."),
-    verify: bool = typer.Option(False, "--verify", "-v", help="Run health checks before merging."),
-    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Preview without writing."),
+    project_dir: Path | None = typer.Option(
+        None, "--project-dir", "-p", help="Project directory."
+    ),
+    verify: bool = typer.Option(
+        False, "--verify", "-v", help="Run health checks before merging."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-n", help="Preview without writing."
+    ),
     strategy: str = typer.Option(
         "union", "--strategy", "-s", help="Merge strategy: union or replace."
+    ),
+    token: str | None = typer.Option(
+        None, "--token", "-t", help="Bearer token for authentication."
+    ),
+    header: list[str] | None = typer.Option(
+        None, "--header", "-H", help="Custom header (repeatable)."
+    ),
+    user: str | None = typer.Option(
+        None, "--user", "-u", help="Username for basic auth."
+    ),
+    password: str | None = typer.Option(
+        None, "--password", help="Password for basic auth."
     ),
 ) -> None:
     """Pull server definitions from a remote registry into local project config."""
@@ -109,7 +174,13 @@ def registry_pull(
         raise typer.Exit(1) from exc
 
     try:
-        remote = fetch_remote_servers(url)
+        auth_headers = _build_headers(token, header, user, password)
+    except ValueError as exc:
+        console.print(f"[red]Invalid header:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    try:
+        remote = fetch_remote_servers(url, headers=auth_headers)
     except McpManagerError as exc:
         console.print(f"[red]Failed to fetch registry:[/red] {exc}")
         raise typer.Exit(1) from exc

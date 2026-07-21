@@ -37,13 +37,16 @@ class RegistryDiff:
     removed: list[McpServer]
 
 
-def fetch_remote_servers(url: str) -> list[McpServer]:
+def fetch_remote_servers(
+    url: str, headers: dict[str, str] | None = None
+) -> list[McpServer]:
     """Fetch server definitions from a remote URL.
 
     Supports YAML and JSON. Returns a list of McpServer objects.
 
     Args:
         url: HTTP(S) URL pointing to a registry file.
+        headers: Optional HTTP headers (e.g. Authorization Bearer token).
 
     Returns:
         Parsed servers.
@@ -52,7 +55,7 @@ def fetch_remote_servers(url: str) -> list[McpServer]:
         WritebackError: On fetch or parse failure.
     """
     try:
-        resp = httpx.get(url, timeout=15, follow_redirects=True)
+        resp = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
         raise WritebackError(f"Failed to fetch registry {url}: {exc}") from exc
