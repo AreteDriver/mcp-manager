@@ -7,6 +7,7 @@ from pathlib import Path
 import typer
 
 from mcp_manager import __version__
+from mcp_manager.commands.auth_cmd import auth_list_impl, login_impl, logout_impl
 from mcp_manager.commands.common import console
 from mcp_manager.commands.init_wizard import init_wizard_impl
 from mcp_manager.commands.install import install_impl
@@ -492,6 +493,47 @@ def server_uninstall(
             force=force,
             project=project,
         )
+    except McpManagerError:
+        raise typer.Exit(1) from None
+
+
+
+@registry_app.command(name="login")
+def registry_login(
+    url: str = typer.Argument(..., help="Registry URL to authenticate against."),
+    token: str | None = typer.Option(
+        None, "--token", "-t", help="Bearer token for authentication."
+    ),
+    user: str | None = typer.Option(
+        None, "--user", "-u", help="Username for basic auth."
+    ),
+    password: str | None = typer.Option(
+        None, "--password", help="password for basic auth."
+    ),
+) -> None:
+    """Store credentials for a private registry."""
+    try:
+        login_impl(url=url, token=token, user=user, password=password)
+    except McpManagerError:
+        raise typer.Exit(1) from None
+
+
+@registry_app.command(name="logout")
+def registry_logout(
+    url: str = typer.Argument(..., help="Registry URL to remove credentials for."),
+) -> None:
+    """Remove stored credentials for a registry."""
+    try:
+        logout_impl(url=url)
+    except McpManagerError:
+        raise typer.Exit(1) from None
+
+
+@registry_app.command(name="auth-list")
+def registry_auth_list() -> None:
+    """List stored registry authentication profiles."""
+    try:
+        auth_list_impl()
     except McpManagerError:
         raise typer.Exit(1) from None
 

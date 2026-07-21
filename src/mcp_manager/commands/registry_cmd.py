@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import typer
 from rich.table import Table
 
+from mcp_manager.auth import resolve_auth_headers
 from mcp_manager.commands.common import console
 from mcp_manager.exceptions import McpManagerError
 from mcp_manager.models import ServerStatus
@@ -23,30 +25,37 @@ registry_app = typer.Typer(name="registry", help="Remote registry sync commands.
 
 
 def _build_headers(
+    url: str,
     token: str | None,
     header: list[str] | None,
     user: str | None,
     password: str | None,
 ) -> dict[str, str] | None:
-    """Build HTTP headers from CLI auth options."""
-    headers: dict[str, str] = {}
-
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-
-    if user and password:
-        import base64
-        credentials = base64.b64encode(f"{user}:{password}".encode()).decode()
-        headers["Authorization"] = f"Basic {credentials}"
-
+    """Build HTTP headers from CLI auth options, stored profiles, and env vars."""
+    cli_headers: dict[str, str] = {}
     if header:
         for h in header:
             if ":" not in h:
                 raise ValueError(f"Invalid header format (expected 'Key:Value'): {h}")
             key, value = h.split(":", 1)
-            headers[key.strip()] = value.strip()
+            cli_headers[key.strip()] = value.strip()
 
-    return headers if headers else None
+    if token and not os.environ.get("CI"):
+        console.print(
+            "[yellow]Warning: passing tokens via CLI is insecure. "
+            "Use `mcp-manager registry login` instead.[/yellow]"
+        )
+
+    return resolve_auth_headers(
+        url,
+        cli_token=token,
+        cli_user=user,
+        cli_password=password,
+        cli_headers=cli_headers if cli_headers else None,
+        env_token=os.environ.get("MCP_MANAGER_REGISTRY_TOKEN"),
+        env_user=os.environ.get("MCP_MANAGER_REGISTRY_USER"),
+        env_password=os.environ.get("MCP_MANAGER_REGISTRY_PASSWORD"),
+    )
 
 
 @registry_app.command(name="diff")
@@ -86,7 +95,7 @@ def registry_diff(
         raise typer.Exit(1) from exc
 
     try:
-        auth_headers = _build_headers(token, header, user, password)
+        auth_headers = _build_headers(url, token, header, user, password)
     except ValueError as exc:
         console.print(f"[red]Invalid header:[/red] {exc}")
         raise typer.Exit(1) from exc
@@ -174,7 +183,7 @@ def registry_pull(
         raise typer.Exit(1) from exc
 
     try:
-        auth_headers = _build_headers(token, header, user, password)
+        auth_headers = _build_headers(url, token, header, user, password)
     except ValueError as exc:
         console.print(f"[red]Invalid header:[/red] {exc}")
         raise typer.Exit(1) from exc
