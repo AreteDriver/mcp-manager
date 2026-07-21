@@ -28,3 +28,4 @@ id_ecdsa*
 id_ed25519*
 *.p12
 secrets.json
+site/
