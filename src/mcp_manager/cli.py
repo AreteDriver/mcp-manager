@@ -23,6 +23,7 @@ from mcp_manager.commands.ops import (
     validate_ci_impl,
 )
 from mcp_manager.commands.project import project_app
+from mcp_manager.commands.registry_cmd import registry_app
 from mcp_manager.commands.servers import (
     add_impl,
     export_config_impl,
@@ -49,6 +50,9 @@ app.add_typer(project_app, name="project")
 # Template sub-typer
 template_app = typer.Typer(name="template", help="Project template commands.")
 app.add_typer(template_app, name="template")
+
+# Registry sub-typer
+app.add_typer(registry_app, name="registry")
 
 
 @app.callback(invoke_without_command=True)
