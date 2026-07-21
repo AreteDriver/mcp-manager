@@ -182,6 +182,35 @@ def resolve_auth_headers(
     store.load()
     profile = store.get(url)
     if profile:
+        # Auto-refresh OAuth2 tokens near expiry
+        if profile.type == AuthType.OAUTH2 and profile.refresh_token and profile.token_url:
+            import time as _time
+            if profile.expires_at is not None and (_time.time() > profile.expires_at - 300):
+                try:
+                    from mcp_manager.oauth2 import OAuth2DeviceFlow
+                    flow = OAuth2DeviceFlow(
+                        device_auth_url="",
+                        token_url=profile.token_url,
+                    )
+                    refreshed = flow.refresh(profile.refresh_token)
+                    import time as _time2
+                    new_expires = (
+                        _time2.time() + refreshed.expires_in if refreshed.expires_in else None
+                    )
+                    # Update profile in store
+                    profile = AuthProfile(
+                        type=AuthType.OAUTH2,
+                        token=refreshed.access_token,
+                        refresh_token=refreshed.refresh_token or profile.refresh_token,
+                        expires_at=new_expires,
+                        token_url=profile.token_url,
+                        added_at=profile.added_at,
+                    )
+                    store.add(url, profile)
+                    store.save()
+                except Exception:
+                    # Refresh failed — use stale token, downstream will handle 401
+                    pass
         profile_headers = profile.to_headers()
         if profile_headers:
             return profile_headers
