@@ -38,6 +38,13 @@ class ConfigWriteback:
         """Return the list of IDE/tool names we can write to."""
         return list(self._ide_configs.keys())
 
+    def get_config_path(self, ide: str) -> Path | None:
+        """Return the expected config path for an IDE, or None if unknown."""
+        info = self._ide_configs.get(ide)
+        if info:
+            return info[0]
+        return None
+
     def write_servers(
         self,
         ide: str,
@@ -250,6 +257,7 @@ class ConfigWriteback:
                         del existing[name]
                         removed.append(name)
         else:
+            data = dict(data)
             for name in list(data):
                 if name in server_names:
                     del data[name]
@@ -260,6 +268,8 @@ class ConfigWriteback:
 
     def _atomic_write(self, path: Path, data: dict[str, Any]) -> None:
         """Write JSON atomically via a temp file."""
+        import os
+
         try:
             fd, tmp_path = tempfile.mkstemp(
                 dir=path.parent,
@@ -269,7 +279,7 @@ class ConfigWriteback:
             with open(fd, "w", encoding="utf-8") as fh:
                 json.dump(data, fh, indent=2, ensure_ascii=False)
                 fh.write("\n")
-            Path(tmp_path).rename(path)
+            os.replace(tmp_path, path)
         except OSError as exc:
             raise WritebackError(f"Failed to write {path}: {exc}") from exc
 

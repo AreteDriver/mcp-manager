@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from mcp_manager import __version__
+
 # ---------------------------------------------------------------------------
 # IDE config discovery paths.
 # Each entry: (tool_name, config_path_str, wrapper_key_or_None)
@@ -37,4 +39,4 @@ HEALTH_TIMEOUT_SECONDS: int = 10
 # ---------------------------------------------------------------------------
 MCP_PROTOCOL_VERSION: str = "2024-11-05"
 MCP_CLIENT_NAME: str = "mcp-manager"
-MCP_CLIENT_VERSION: str = "0.1.0"
+MCP_CLIENT_VERSION: str = __version__

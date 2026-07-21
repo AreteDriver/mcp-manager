@@ -123,6 +123,12 @@ class ConfigWritebackTarget:
     def get_supported_ides(self) -> list[str]:
         return list(self._ide_configs.keys())
 
+    def get_config_path(self, ide: str) -> Path | None:
+        info = self._ide_configs.get(ide)
+        if info:
+            return info[0]
+        return None
+
     def preview(self, ide: str, servers: list[Any]) -> dict[str, Any]:
         config_path, wrapper_key = self._ide_configs[ide]
         if not config_path.exists():

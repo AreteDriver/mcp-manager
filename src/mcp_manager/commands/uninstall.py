@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 
 from mcp_manager.commands.common import (
@@ -14,6 +15,8 @@ from mcp_manager.health import HealthChecker
 from mcp_manager.models import McpServer, ServerStatus
 from mcp_manager.telemetry import track_command
 from mcp_manager.writeback import ConfigWriteback
+
+logger = logging.getLogger(__name__)
 
 
 def uninstall_impl(
@@ -93,8 +96,9 @@ def _warn_if_healthy(matches: list[McpServer]) -> None:
     checker = HealthChecker(timeout=5)
     try:
         result = asyncio.run(checker.check(server))
-    except Exception:
-        return  # Ignore health check failures during uninstall.
+    except Exception as exc:
+        logger.warning("Health check failed during uninstall warning: %s", exc)
+        return
 
     if result.status == ServerStatus.HEALTHY:
         console.print(

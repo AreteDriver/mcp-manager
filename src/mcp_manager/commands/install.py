@@ -154,17 +154,7 @@ def _install_to_ide(
 
 def _get_config_path(writeback: ConfigWriteback, ide: str) -> Path | None:
     """Return the expected config path for an IDE, or None if unknown."""
-    from typing import cast
-
-    # Access the internal mapping; this is test-only introspection.
-    mapping: dict[str, tuple[Path, str | None]] = cast(
-        dict[str, tuple[Path, str | None]],
-        getattr(writeback, "_ide_configs", {}),
-    )
-    info = mapping.get(ide)
-    if info:
-        return info[0]
-    return None
+    return writeback.get_config_path(ide)
 
 
 def _render_results(

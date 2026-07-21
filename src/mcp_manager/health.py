@@ -70,8 +70,6 @@ class HealthChecker:
             ProtocolError,
             httpx.HTTPError,
             json.JSONDecodeError,
-            ValueError,
-            TypeError,
         ) as exc:
             return HealthResult(
                 server_name=server.name,

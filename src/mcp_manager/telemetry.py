@@ -59,6 +59,12 @@ class TelemetryStore:
     def close(self) -> None:
         self._conn.close()
 
+    def __enter__(self) -> TelemetryStore:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
     def record(
         self,
         event_type: str,

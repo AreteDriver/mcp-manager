@@ -48,6 +48,11 @@ def login_impl(
     if not ok:
         console.print(f"[yellow]{msg}[/yellow]")
 
+    console.print(
+        "[yellow]Note:[/yellow] credentials are stored in plaintext. "
+        "Encrypt at rest or use a keyring integration if your threat model requires it."
+    )
+
     masked = "****" if token else f"{user}:****"
     console.print(f"[green]Saved {profile.type.value} credentials for {url}[/green] ({masked})")
 

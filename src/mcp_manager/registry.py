@@ -25,6 +25,7 @@ class ServerRegistry:
 
     def load(self) -> None:
         """Load registry from disk. No-op if file doesn't exist."""
+        self._entries.clear()
         if not self._path.is_file():
             return
 
