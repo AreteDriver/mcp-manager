@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-import yaml
-
 from mcp_manager.exporters import export_servers, import_servers
 from mcp_manager.models import McpServer, NetworkConfig, StdioConfig, TransportType
 from mcp_manager.writeback import ConfigWriteback

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import httpx
+
 from mcp_manager.auth import AuthProfile, AuthStore, AuthType
 from mcp_manager.commands.common import console
 from mcp_manager.exceptions import McpManagerError
@@ -27,6 +29,9 @@ def login_impl(
         )
         raise McpManagerError("Provide --token or --user + --password")
 
+    # Validate credentials before storing.
+    _validate_credentials(url, profile)
+
     store = AuthStore()
     store.load()
 
@@ -45,6 +50,40 @@ def login_impl(
 
     masked = "****" if token else f"{user}:****"
     console.print(f"[green]Saved {profile.type.value} credentials for {url}[/green] ({masked})")
+
+
+def _validate_credentials(url: str, profile: AuthProfile) -> None:
+    """Validate credentials by making a HEAD request to the registry URL.
+
+    Aborts with an error on 401/403. Proceeds with a warning on other
+    non-success statuses (e.g. 405 Method Not Allowed).
+    """
+    headers = profile.to_headers()
+    if not headers:
+        return  # Nothing to validate.
+
+    try:
+        resp = httpx.head(url, headers=headers, timeout=10, follow_redirects=True)
+    except httpx.HTTPError as exc:
+        console.print(f"[yellow]Warning: could not validate credentials: {exc}[/yellow]")
+        return
+
+    if resp.status_code in (401, 403):
+        console.print(
+            f"[red]Authentication failed: HTTP {resp.status_code} "
+            f"{resp.reason_phrase}[/red]\n"
+            f"[dim]Credentials NOT stored.[/dim]"
+        )
+        raise McpManagerError(
+            f"Authentication failed: HTTP {resp.status_code} {resp.reason_phrase}"
+        )
+
+    if not resp.is_success:
+        console.print(
+            f"[yellow]Warning: registry returned HTTP {resp.status_code} "
+            f"{resp.reason_phrase} during validation. "
+            f"Proceeding anyway.[/yellow]"
+        )
 
 
 def logout_impl(url: str) -> None:

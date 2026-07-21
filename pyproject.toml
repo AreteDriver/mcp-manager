@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arete-mcp"
-version = "0.6.0"
+version = "0.7.0"
 description = "Discover, health-check, and sync MCP servers across Claude Code, Cursor, Windsurf, and more. Git-native project configs with atomic IDE write-back."
 readme = "README.md"
 license = "MIT"

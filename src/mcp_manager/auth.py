@@ -15,7 +15,10 @@ from mcp_manager.exceptions import McpManagerError
 
 logger = logging.getLogger(__name__)
 
-AUTH_FILE: Path = MANAGER_CONFIG_DIR / "auth.json"
+_AUTH_FILE_OVERRIDE = os.environ.get("MCP_MANAGER_AUTH_FILE")
+AUTH_FILE: Path = (
+    Path(_AUTH_FILE_OVERRIDE) if _AUTH_FILE_OVERRIDE else MANAGER_CONFIG_DIR / "auth.json"
+)
 
 
 class AuthType(StrEnum):
