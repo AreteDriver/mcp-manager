@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/AreteDriver/mcp-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/AreteDriver/mcp-manager/actions)
 [![CodeQL](https://github.com/AreteDriver/mcp-manager/actions/workflows/codeql.yml/badge.svg)](https://github.com/AreteDriver/mcp-manager/actions)
-[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)](https://github.com/AreteDriver/mcp-manager/actions)
+[![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](https://github.com/AreteDriver/mcp-manager/actions)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/arete-mcp.svg)](https://pypi.org/project/arete-mcp/)
@@ -250,6 +250,36 @@ mcp-manager lock --check            # Validate lockfile is current (CI gate)
 
 ---
 
+## Private Registries & Authentication
+
+Authenticate against private registries so `registry diff` and `registry pull` can fetch server definitions behind HTTP Basic or Bearer auth.
+
+```bash
+# Store a Bearer token (validates via HEAD request before saving)
+mcp-manager registry login https://reg.example.com/mcp.yaml --token ghp_xxx
+
+# Store Basic auth credentials
+mcp-manager registry login https://reg.example.com/mcp.yaml --user alice --password secret
+
+# List stored profiles (credentials are masked)
+mcp-manager registry auth-list
+
+# Remove a profile
+mcp-manager registry logout https://reg.example.com/mcp.yaml
+```
+
+Credentials are stored in `~/.mcp-manager/auth.json` with `0o600` permissions. You can override the path with `MCP_MANAGER_AUTH_FILE`.
+
+**Auth priority chain** (highest wins):
+1. CLI flag (`--token`, `--user`)
+2. Stored profile for the registry URL
+3. Environment variable (`MCP_MANAGER_REGISTRY_TOKEN`, `MCP_MANAGER_REGISTRY_USER` / `PASSWORD`)
+4. Anonymous (no auth)
+
+⚠️ **Security note:** passing `--token` on the CLI is insecure — it appears in shell history and `ps` output. Prefer `registry login` (stored credentials) or env vars.
+
+---
+
 ## Supported IDEs
 
 | IDE | Config Path | Write-Back |
@@ -288,6 +318,7 @@ mcp-manager lock --check            # Validate lockfile is current (CI gate)
 - [x] Server tags with `--tag` / `--exclude-tag` filters
 - [x] Onboarding wizard (`mcp-manager init`)
 - [x] Project templates (`mcp-manager template list` / `use`)
+- [x] Private registry authentication (`registry login` / `logout` / `auth-list`)
 
 See [ROADMAP.md](ROADMAP.md) for what's next.
 

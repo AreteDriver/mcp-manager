@@ -64,6 +64,7 @@ Requires Python 3.11+.
 
 - [Quickstart](quickstart.md) — Get running in 2 minutes
 - [Configuration](configuration.md) — `.mcp-manager.yml` reference
+- [Authentication](authentication.md) — Private registries, login/logout, env vars
 - [Team Features](team.md) — Shared configs, tags, onboarding
 - [IDE Support](ide-support.md) — Per-IDE quirks and paths
 - [Contributing](contributing.md) — How to contribute

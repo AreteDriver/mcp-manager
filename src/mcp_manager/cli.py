@@ -511,7 +511,14 @@ def registry_login(
         None, "--password", help="password for basic auth."
     ),
 ) -> None:
-    """Store credentials for a private registry."""
+    """Store credentials for a private registry.
+
+    [yellow]Security warning:[/yellow] passing tokens via CLI flags is
+    insecure — they appear in shell history and process listings.
+    Prefer [green]mcp-manager registry login[/green] (interactive) or
+    set [cyan]MCP_MANAGER_REGISTRY_TOKEN[/cyan] /
+    [cyan]MCP_MANAGER_REGISTRY_USER[/cyan] env vars.
+    """
     try:
         login_impl(url=url, token=token, user=user, password=password)
     except McpManagerError:

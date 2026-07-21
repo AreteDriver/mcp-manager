@@ -1,7 +1,7 @@
 # MCP Manager Roadmap
 
-**Current version:** v0.5.0 — Team adoption, PyPI growth, config inheritance, tags, templates
-**Target:** v0.6.0 — Multi-project workspaces, remote registry sync, advanced marketplace
+**Current version:** v0.7.0 — Authentication hardening (profiles, env-var fallback, credential validation) + release automation
+**Target:** v0.8.0 — OAuth2 / keyring integration, token refresh, team RBAC
 
 ---
 
