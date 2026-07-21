@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from mcp_manager.config import MANAGER_CONFIG_DIR
 from mcp_manager.exceptions import McpManagerError
@@ -29,9 +30,10 @@ class AuthType(StrEnum):
     OAUTH2 = "oauth2"
 
 
-@dataclass(frozen=True)
-class AuthProfile:
+class AuthProfile(BaseModel):
     """A single stored authentication profile."""
+
+    model_config = ConfigDict(frozen=True)
 
     type: AuthType
     token: str | None = None
@@ -40,36 +42,16 @@ class AuthProfile:
     refresh_token: str | None = None
     expires_at: float | None = None
     token_url: str | None = None
-    added_at: float = field(default_factory=lambda: __import__("time").time())
+    added_at: float = Field(default_factory=lambda: __import__("time").time())
 
     def to_dict(self) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "type": self.type.value,
-            "token": self.token,
-            "user": self.user,
-            "password": self.password,
-            "added_at": self.added_at,
-        }
-        if self.refresh_token is not None:
-            result["refresh_token"] = self.refresh_token
-        if self.expires_at is not None:
-            result["expires_at"] = self.expires_at
-        if self.token_url is not None:
-            result["token_url"] = self.token_url
-        return result
+        """Serialize to a plain dict (matches legacy auth.json format)."""
+        return self.model_dump()
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuthProfile:
-        return cls(
-            type=AuthType(data["type"]),
-            token=data.get("token"),
-            user=data.get("user"),
-            password=data.get("password"),
-            refresh_token=data.get("refresh_token"),
-            expires_at=data.get("expires_at"),
-            token_url=data.get("token_url"),
-            added_at=data.get("added_at", 0.0),
-        )
+        """Deserialize from a plain dict (legacy compat wrapper)."""
+        return cls.model_validate(data)
 
     def to_headers(self) -> dict[str, str]:
         if self.type in (AuthType.BEARER, AuthType.OAUTH2) and self.token:

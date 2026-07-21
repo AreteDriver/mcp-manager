@@ -113,8 +113,10 @@ class TestRegistryLogout:
 
 
 class TestRegistryAuthList:
-    def test_auth_list_empty(self) -> None:
-        result = runner.invoke(app, ["registry", "auth-list"])
+    def test_auth_list_empty(self, tmp_path: Path) -> None:
+        auth_file = tmp_path / "auth.json"
+        with patch("mcp_manager.auth.AUTH_FILE", auth_file):
+            result = runner.invoke(app, ["registry", "auth-list"])
         assert result.exit_code == 0
         assert "No stored registry credentials" in result.output
 
@@ -354,3 +356,79 @@ class TestEnvVarFallback:
         store2 = auth_mod.AuthStore()
         store2.load()
         assert store2.get("https://example.com/reg.yaml") is not None
+
+class TestPasswordStdin:
+    """Tests for --password-stdin secure password input."""
+
+    def test_read_password_stdin_piped(self) -> None:
+        from io import StringIO
+        from unittest.mock import patch
+        from mcp_manager.commands.auth_cmd import _read_password_stdin
+
+        with patch("sys.stdin", StringIO("secret\n")):
+            result = _read_password_stdin()
+        assert result == "secret"
+
+    def test_read_password_stdin_tty_returns_none(self) -> None:
+        from io import StringIO
+        from unittest.mock import patch
+        from mcp_manager.commands.auth_cmd import _read_password_stdin
+
+        fake_tty = StringIO("")
+        fake_tty.isatty = lambda: True  # type: ignore[method-assign]
+        with patch("sys.stdin", fake_tty):
+            result = _read_password_stdin()
+        assert result is None
+
+    def test_login_password_stdin(self, tmp_path: Path) -> None:
+        """Registry login accepts password from stdin via --password-stdin."""
+        auth_file = tmp_path / "auth.json"
+        with (
+            patch("mcp_manager.auth.AUTH_FILE", auth_file),
+            patch("mcp_manager.commands.auth_cmd.httpx.head") as mock_head,
+        ):
+            mock_head.return_value.status_code = 200
+            mock_head.return_value.reason_phrase = "OK"
+            result = runner.invoke(
+                app,
+                [
+                    "registry",
+                    "login",
+                    "https://reg.example.com/mcp.yaml",
+                    "--user",
+                    "alice",
+                    "--password-stdin",
+                ],
+                input="wonderland\n",
+            )
+        assert result.exit_code == 0, result.output
+        assert "Saved basic" in result.output
+        store = AuthStore(path=auth_file)
+        store.load()
+        profile = store.get("https://reg.example.com/mcp.yaml")
+        assert profile is not None
+        assert profile.type == AuthType.BASIC
+        assert profile.user == "alice"
+        assert profile.password == "wonderland"
+
+    def test_login_password_stdin_no_pipe_warns(self, tmp_path: Path) -> None:
+        """--password-stdin on a tty errors with usage hint."""
+        auth_file = tmp_path / "auth.json"
+        with (
+            patch("mcp_manager.auth.AUTH_FILE", auth_file),
+            patch("mcp_manager.cli._read_password_stdin", return_value=None),
+        ):
+            result = runner.invoke(
+                app,
+                [
+                    "registry",
+                    "login",
+                    "https://reg.example.com/mcp.yaml",
+                    "--user",
+                    "alice",
+                    "--password-stdin",
+                ],
+            )
+        assert result.exit_code == 1
+        assert "--password-stdin requires piped input" in result.output
+
