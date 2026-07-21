@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-07-20
+
+### Fixed
+
+- **Security**: prevent credential leak via redirect in `_validate_credentials` (`follow_redirects=False`)
+- **Security**: add `--password-stdin` TTY guard with clear error message and usage example
+- **Dead code**: wire `update_health` into `health_impl` to persist health results to registry
+- **UX**: update login error message to reference `--password-stdin` deprecation
+- **Architecture**: remove auto-save side effect from `ServerRegistry.update_health()`; callers control persistence
+- **Robustness**: lazy `expanduser()` resolution in `ConfigWriteback` to handle `$HOME` changes in tests/containers
+
 ## [0.7.0] — 2026-07-20
 
 ### Added
