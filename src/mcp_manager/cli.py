@@ -9,6 +9,7 @@ import typer
 from mcp_manager import __version__
 from mcp_manager.commands.common import console
 from mcp_manager.commands.init_wizard import init_wizard_impl
+from mcp_manager.commands.install import install_impl
 from mcp_manager.commands.marketplace import (
     marketplace_info_impl,
     marketplace_install_impl,
@@ -53,6 +54,10 @@ app.add_typer(template_app, name="template")
 
 # Registry sub-typer
 app.add_typer(registry_app, name="registry")
+
+# Server sub-typer
+server_app = typer.Typer(name="server", help="Per-server management commands.")
+app.add_typer(server_app, name="server")
 
 
 @app.callback(invoke_without_command=True)
@@ -416,8 +421,49 @@ def marketplace_install(
         raise typer.Exit(1) from None
 
 
+@server_app.command(name="install")
+def server_install(
+    name: str = typer.Argument(..., help="Server name from registry."),
+    ide: str | None = typer.Option(
+        None, "--ide", "-i", help="Target IDE (cursor, claude-code, windsurf)."
+    ),
+    all_ides: bool = typer.Option(
+        False, "--all", help="Install to all supported IDEs."
+    ),
+    create: bool = typer.Option(
+        False, "--create", help="Create IDE config if missing."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview changes without writing."
+    ),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Overwrite if server already exists."
+    ),
+    verify: bool = typer.Option(
+        False, "--verify", help="Run health check after install."
+    ),
+    project: Path | None = typer.Option(
+        None, "--project", "-p", help="Project dir (for context)."
+    ),
+) -> None:
+    """Install a registry server into IDE config(s)."""
+    try:
+        install_impl(
+            name=name,
+            ide=ide,
+            all_ides=all_ides,
+            create=create,
+            dry_run=dry_run,
+            force=force,
+            verify=verify,
+            project=project,
+        )
+    except McpManagerError:
+        raise typer.Exit(1) from None
+
+
 @app.command(name="marketplace-refresh")
-def marketplace_refresh(
+def marketplace_refresh (
     output: Path = typer.Option(
         ..., "--output", "-o", help="Path to marketplace index.yaml to update."
     ),
