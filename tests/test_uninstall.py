@@ -147,9 +147,11 @@ def test_uninstall_force_bypasses_warning(ide_configs: dict[str, Path]) -> None:
         transport=TransportType.STDIO,
     )
 
+    from unittest.mock import AsyncMock
+
     with patch(
-        "mcp_manager.commands.uninstall.asyncio.run",
-        return_value=healthy,
+        "mcp_manager.commands.uninstall.HealthChecker.check",
+        new=AsyncMock(return_value=healthy),
     ):
         # Without --force, should warn.
         result = runner.invoke(app, ["server", "uninstall", "my-srv", "--ide", "cursor"])
@@ -163,8 +165,8 @@ def test_uninstall_force_bypasses_warning(ide_configs: dict[str, Path]) -> None:
         {"mcpServers": {"my-srv": {"command": "npx"}}},
     )
     with patch(
-        "mcp_manager.commands.uninstall.asyncio.run",
-        return_value=healthy,
+        "mcp_manager.commands.uninstall.HealthChecker.check",
+        new=AsyncMock(return_value=healthy),
     ):
         result_force = runner.invoke(
             app, ["server", "uninstall", "my-srv", "--ide", "cursor", "--force"]

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -361,10 +361,7 @@ def test_install_verify_runs_health_check(tmp_path: Path, sample_server: McpServ
 
         with patch("mcp_manager.commands.install.ConfigWriteback", new=lambda: wb), patch(
             "mcp_manager.commands.install.HealthChecker.check",
-            return_value=health_result,
-        ), patch(
-            "mcp_manager.commands.install.asyncio.run",
-            return_value=health_result,
+            new=AsyncMock(return_value=health_result),
         ):
             result = runner.invoke(
                 app, ["server", "install", "my-server", "--ide", "cursor", "--verify"]
