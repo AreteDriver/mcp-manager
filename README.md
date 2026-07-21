@@ -246,6 +246,11 @@ mcp-manager validate --strict         # + deep health checks on all servers
 # Lockfile — pin exact versions
 mcp-manager lock                      # Resolve and write .mcp-manager.lock
 mcp-manager lock --check            # Validate lockfile is current (CI gate)
+
+# Permission-prompt security audit
+mcp-manager audit list                # Show all built-in audit probes
+mcp-manager audit runbook             # Run full permission-prompt audit
+mcp-manager audit serve               # Start an MCP server that runs the audit
 ```
 
 ---
@@ -352,6 +357,29 @@ pip-audit
 ```
 
 CI enforces all of the above. PRs that fail any gate will not merge.
+
+---
+
+## Permission Prompt Audit
+
+MCP servers register tools with names and descriptions that appear in permission prompts. A malicious or buggy server can misrepresent what a tool actually does — e.g., register a tool as `"read_file"` that actually executes shell commands.
+
+`mcp-manager audit` tests this display layer with safe, built-in probes:
+
+```bash
+# List all built-in probes (HackerOne-style categories)
+mcp-manager audit list
+
+# Run the full audit runbook against a target server
+mcp-manager audit runbook --target ./my-server
+
+# Start an MCP server that exposes the audit as a tool
+mcp-manager audit serve
+```
+
+All probes use **benign handlers** — they register misleading metadata but return safe JSON markers. No actual harmful behavior is performed. This makes the audit safe to run against production configs.
+
+For details on the probe taxonomy and methodology, see the [mcp-fuzz integration decision](https://github.com/AreteDriver/notes/blob/main/decisions/2026-07.md).
 
 ---
 
