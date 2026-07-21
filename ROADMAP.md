@@ -1,7 +1,7 @@
 # MCP Manager Roadmap
 
-**Current version:** v0.7.0 — Authentication hardening (profiles, env-var fallback, credential validation) + release automation
-**Target:** v0.8.0 — OAuth2 / keyring integration, token refresh, team RBAC
+**Current version:** v0.7.1 — Auth hardening + review debt closure
+**Target:** v0.8.0 — OAuth2 device flow, token refresh, team RBAC
 
 ---
 
@@ -123,13 +123,47 @@ Curated directory of MCP servers with quality scores (health pass rate, tool cou
 | Test coverage | ✅ Complete | ≥90% | pytest-cov |
 | PyPI downloads | 🔄 Next | 200+/mo | pypistats |
 
-### v0.6.0 (Target)
+### v0.6.0 — "Registry Sync" ✅ Shipped
+
+**Theme:** Pull server definitions from remote registries.
+
+| Metric | Status | Target | Measurement |
+|--------|--------|--------|-------------|
+| Remote registry sync | ✅ Complete | `mcp-manager registry diff` / `pull` | Integration tests |
+| Registry authentication | ✅ Complete | `--token`, `--user`, `--password` | Unit tests |
+| PyPI downloads | 🔄 Next | 200+/mo | pypistats |
+
+### v0.7.0 — "Auth Hardening" ✅ Shipped
+
+**Theme:** Production-grade credential management.
+
+| Metric | Status | Target | Measurement |
+|--------|--------|--------|-------------|
+| Auth profiles (stored credentials) | ✅ Complete | `registry login` / `logout` / `auth-list` | Unit tests |
+| Env-var fallback | ✅ Complete | `MCP_MANAGER_REGISTRY_TOKEN` / `_USER` / `_PASSWORD` | Unit tests |
+| Credential validation | ✅ Complete | HEAD request before storing | Unit tests |
+| Release automation | ✅ Complete | Version guard + CHANGELOG extraction + PyPI publish | Workflow tests |
+| Test coverage | ✅ Complete | ≥90% | pytest-cov |
+
+### v0.7.1 — "Review Debt Closure" ✅ Shipped
+
+**Theme:** Zero review findings, clean CI, zero warnings.
+
+| Metric | Status | Target | Measurement |
+|--------|--------|--------|-------------|
+| Senior review findings closed | ✅ Complete | 16/16 resolved | Commit log |
+| CI green (release workflow) | ✅ Complete | Tests + build + publish pass | GitHub Actions |
+| Zero test warnings | ✅ Complete | No RuntimeWarning or PytestUnknownMarkWarning | pytest |
+
+### v0.8.0 (Target)
+
+**Theme:** Enterprise auth and team governance.
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
-| Multi-project workspaces | Single `.mcp-manager.yml` referencing sub-projects | Design doc |
-| Remote registry sync | Pull server definitions from remote URL | Prototype |
-| Advanced marketplace | User ratings, dependency graphs | Community submissions |
+| OAuth2 device flow | `mcp-manager registry login --oauth2` | Design doc |
+| Token refresh | Auto-refresh before expiry | Prototype |
+| Team RBAC | Read-only vs admin registry roles | Design doc |
 
 ---
 
@@ -145,4 +179,4 @@ The team that makes MCP configs as portable as `docker-compose.yml` wins this la
 
 ---
 
-*Last updated: 2026-07-19*
+*Last updated: 2026-07-20*
