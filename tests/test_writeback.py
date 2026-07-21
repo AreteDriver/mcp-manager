@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -175,6 +176,45 @@ class TestWriteServersExistingFile:
         assert backup.exists()
         assert json.loads(backup.read_text()) == {"mcpServers": {}}
 
+    def test_os_error_on_parent_dir_creation(
+        self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer
+    ) -> None:
+        fake_path = tmp_path / "readonly" / "claude.json"
+        writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
+        # Make parent non-writable by using a file as parent path
+        (tmp_path / "readonly").write_text("not a dir")
+        with pytest.raises(WritebackError, match="Cannot create parent dirs"):
+            writeback.write_servers("claude-code", [sample_stdio_server], create_if_missing=True)
+
+    def test_os_error_on_backup_copy(
+        self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer
+    ) -> None:
+        fake_path = tmp_path / "claude.json"
+        fake_path.write_text(json.dumps({"mcpServers": {}}))
+        writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
+        with patch("mcp_manager.writeback.shutil.copy2", side_effect=OSError("read-only")):
+            with pytest.raises(WritebackError, match="Failed to create backup"):
+                writeback.write_servers("claude-code", [sample_stdio_server])
+
+    def test_atomic_write_os_error(
+        self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer
+    ) -> None:
+        fake_path = tmp_path / "claude.json"
+        fake_path.write_text(json.dumps({"mcpServers": {}}))
+        writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
+        with patch("mcp_manager.writeback.tempfile.mkstemp", side_effect=OSError("disk full")):
+            with pytest.raises(WritebackError, match="Failed to write"):
+                writeback.write_servers("claude-code", [sample_stdio_server])
+
+    def test_non_dict_config_file(
+        self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer
+    ) -> None:
+        fake_path = tmp_path / "claude.json"
+        fake_path.write_text(json.dumps(["not", "a", "dict"]))
+        writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
+        with pytest.raises(WritebackError, match="must contain a JSON object"):
+            writeback.write_servers("claude-code", [sample_stdio_server])
+
 
 # ---------------------------------------------------------------------------
 # Serialization
@@ -207,3 +247,13 @@ class TestSerialization:
         srv = result["mcpServers"]["sse-srv"]
         assert srv["type"] == "sse"
         assert srv["url"] == "http://x"
+
+    def test_invalid_server_raises(self, writeback: ConfigWriteback) -> None:
+        """Server with no stdio config and no network config raises WritebackError."""
+        server = McpServer(
+            name="orphan",
+            transport=TransportType.STDIO,
+            source_tool="test",
+        )
+        with pytest.raises(WritebackError, match="no valid transport config"):
+            writeback.preview("claude-code", [server])

@@ -1,7 +1,7 @@
 # MCP Manager Roadmap
 
-**Current version:** v0.4.0 — Server marketplace, version pinning, CI gates, atomic write-back
-**Target:** v0.5.0 — Team adoption, PyPI growth, marketplace quality scores
+**Current version:** v0.5.0 — Team adoption, PyPI growth, config inheritance, tags, templates
+**Target:** v0.6.0 — Multi-project workspaces, remote registry sync, advanced marketplace
 
 ---
 
@@ -103,13 +103,33 @@ Curated directory of MCP servers with quality scores (health pass rate, tool cou
 | CI gate GitHub Action | ✅ Complete | Composite action in repo | Workflow tests |
 | PyPI package published | 🔄 Next | `arete-mcp` | PyPI listing |
 
-### v0.4.0 (Target)
+### v0.4.0 (Shipped)
+
+| Metric | Status | Target | Measurement |
+|--------|--------|--------|-------------|
+| Server marketplace | ✅ Complete | Curated directory with quality scores | Community submissions |
+| Project-scoped config adoption | ✅ Complete | 5+ real projects using `.mcp-manager.yml` | GitHub search |
+| PyPI downloads | 🔄 Next | 200+/mo | pypistats |
+
+### v0.5.0 (Shipped)
+
+| Metric | Status | Target | Measurement |
+|--------|--------|--------|-------------|
+| Config inheritance (`extends:`) | ✅ Complete | Circular detection, left-to-right merge | Unit tests |
+| Server tags | ✅ Complete | `--tag` / `--exclude-tag` filters | Unit tests |
+| Project templates | ✅ Complete | 4+ built-in templates | Integration tests |
+| Init wizard | ✅ Complete | Interactive scaffold | Manual QA |
+| Documentation site | ✅ Complete | MkDocs Material on GitHub Pages | Live URL |
+| Test coverage | ✅ Complete | ≥90% | pytest-cov |
+| PyPI downloads | 🔄 Next | 200+/mo | pypistats |
+
+### v0.6.0 (Target)
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
-| Project-scoped config adoption | 5+ real projects using `.mcp-manager.yml` | GitHub search for `.mcp-manager.yml` |
-| Server marketplace | Curated directory with quality scores | Community submissions |
-| PyPI downloads | 200+/mo | pypistats (deflated for bot noise) |
+| Multi-project workspaces | Single `.mcp-manager.yml` referencing sub-projects | Design doc |
+| Remote registry sync | Pull server definitions from remote URL | Prototype |
+| Advanced marketplace | User ratings, dependency graphs | Community submissions |
 
 ---
 

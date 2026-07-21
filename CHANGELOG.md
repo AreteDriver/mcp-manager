@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-07-20
+
+### Added
+
+- **Config inheritance** (`extends:`) with circular dependency detection and left-to-right merge
+- **Server tags** — filter list/health/sync/monitor with `--tag` and `--exclude-tag`
+- **Init wizard** (`mcp-manager init`) — interactive project scaffold with transport selection and env var prompts
+- **Project templates** (`mcp-manager template list`, `template use`) — pre-configured server bundles (filesystem, brave-search, playwright, etc.)
+- **MkDocs Material documentation site** with GitHub Pages deployment
+- **pytest-benchmark suite** — performance baselines for health, sync, and discovery
+- **Stress tests** — monitor restart storm backoff and 100-server concurrent health check isolation
+
+### Changed
+
+- **Test coverage pushed from 87% to 90%** — deep stdio/network health paths, monitor OSError/backoff, writeback atomic/backup failures, exporter edge cases
+- **README rewritten** with quickstart, feature matrix, and install instructions
+- **PyPI package metadata** updated for `arete-mcp`
+
 ## [0.4.0] — 2026-07-20
 
 ### Added
@@ -86,7 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `.env` and credential patterns to `.gitignore`
 - Security workflow: `pip-audit` + `bandit` on push/PR
 
-[Unreleased]: https://github.com/AreteDriver/mcp-manager/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/AreteDriver/mcp-manager/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/AreteDriver/mcp-manager/releases/tag/v0.2.0

@@ -72,6 +72,13 @@ class TestExportYaml:
         data = yaml.safe_load(out.read_text())
         assert data["servers"] == {}
 
+    def test_os_error_on_write(self, tmp_path: Path) -> None:
+        """Export to a directory instead of file raises ExportError."""
+        out = tmp_path / "is_a_dir"
+        out.mkdir()
+        with pytest.raises(ExportError, match="Failed to write"):
+            export_servers([], out)
+
 
 class TestExportJson:
     def test_creates_file(self, tmp_path: Path) -> None:
@@ -150,3 +157,44 @@ class TestImport:
         imported = import_servers(out)
         for s in imported:
             assert s.source_tool == "import"
+
+    def test_import_skips_non_dict_entries(self, tmp_path: Path) -> None:
+        f = tmp_path / "mixed.yaml"
+        f.write_text(
+            yaml.dump({
+                "version": "1",
+                "servers": {
+                    "good": {"command": "npx"},
+                    "bad": "not a dict",
+                    "also_bad": ["list"],
+                },
+            }),
+            encoding="utf-8",
+        )
+        imported = import_servers(f)
+        assert len(imported) == 1
+        assert imported[0].name == "good"
+
+    def test_import_skips_invalid_server(self, tmp_path: Path) -> None:
+        f = tmp_path / "partial.yaml"
+        f.write_text(
+            yaml.dump({
+                "version": "1",
+                "servers": {
+                    "good": {"command": "npx"},
+                    "bad": {"command": "npx", "args": None},
+                },
+            }),
+            encoding="utf-8",
+        )
+        imported = import_servers(f)
+        assert len(imported) == 1
+        assert imported[0].name == "good"
+
+    def test_serialize_empty_server(self) -> None:
+        """Server with no config serializes to empty dict."""
+        from mcp_manager.exporters import _serialize_server
+
+        server = McpServer(name="orphan", transport=TransportType.STDIO)
+        result = _serialize_server(server)
+        assert result == {}
