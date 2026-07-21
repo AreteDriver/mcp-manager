@@ -1,6 +1,6 @@
 # Design: OAuth2 Device Flow for Registry Authentication
 
-**Status:** Draft  
+**Status:** Approved  
 **Author:** AreteDriver  
 **Date:** 2026-07-20  
 **Version:** v0.8.0  
@@ -77,7 +77,16 @@ $ mcp-manager registry diff https://registry.example.com/mcp.yaml
 
 ```bash
 $ mcp-manager registry logout https://registry.example.com/mcp.yaml
-Revoked token on registry... ✅
+Revoked token on server... ✅
+Removed local profile. ✅
+```
+
+If the registry does not advertise a revocation endpoint, the local profile is still deleted and the user is informed:
+
+```bash
+$ mcp-manager registry logout https://legacy.example.com/mcp.yaml
+Warning: server does not support token revocation.
+Token may remain valid on server until expiry.
 Removed local profile. ✅
 ```
 
@@ -169,6 +178,7 @@ auth:
 ```
 Step 1: CLI → Registry   POST /oauth/device/code
                          { "client_id": "mcp-manager-cli", "scope": "registry:read" }
+                         (overridden by --client-id if provided)
 
          Registry → CLI   { "device_code": "...", "user_code": "ABCD-EFGH",
                             "verification_uri": "https://...", "expires_in": 1800,
@@ -229,6 +239,10 @@ def registry_login(
     password_stdin: bool = typer.Option(False, "--password-stdin"),
     oauth2: bool = typer.Option(False, "--oauth2", help="Force OAuth2 device flow"),
     no_oauth2: bool = typer.Option(False, "--no-oauth2", help="Skip OAuth2 discovery, use token/password"),
+    client_id: str | None = typer.Option(
+        None, "--client-id",
+        help="Override default OAuth2 client ID (rarely needed)"
+    ),
 ):
 ```
 
@@ -239,6 +253,7 @@ def registry_login(
   - Supports OAuth2 → ask user: "Registry supports OAuth2. Use it? [Y/n]"
   - User says yes → device flow
   - User says no or registry doesn't support → Bearer/Basic fallback
+- `client_id` defaults to `"mcp-manager-cli"`; `--client-id` overrides for enterprise registries that require app registration
 
 ### 7.2 `auth-list` Output
 
@@ -273,6 +288,7 @@ src/mcp_manager/
 | Short `expires_in` from registry | Respect server value; if absent, default to 1 hour |
 | `client_secret` required by some token endpoints | Use `client_id` only (public client per RFC 8628 §2). If registry requires secret, document it as unsupported. |
 | Token transmission over HTTP | Discovery fails with warning if token endpoint is HTTP. Require HTTPS. |
+| Client ID enumeration | Default `mcp-manager-cli` is public and non-secret. Registry vendors whitelist it. `--client-id` override available for private registries. |
 
 ---
 
@@ -286,6 +302,7 @@ src/mcp_manager/
 | Network error during polling | Retry with exponential backoff up to 3×, then fail |
 | Refresh token expired/revoked | Print "Session expired. Run: mcp-manager registry login <url>" Exit 1 |
 | Registry returns invalid JSON in discovery | Warn, skip OAuth2, fallback to manual token entry |
+| Token revocation on logout fails | Print warning, proceed with local deletion. Token may remain valid on server until expiry. |
 
 ---
 
@@ -341,11 +358,11 @@ No new runtime dependencies. Device flow is pure HTTP POST + polling; we use `ht
 
 ---
 
-## 13. Open Questions
+## 13. Decisions
 
-1. **Do we need a `client_id` registry?** Should `mcp-manager` use a single hardcoded `client_id="mcp-manager-cli"`, or should each registry vendor register their own? (Lean: single hardcoded, per `gh` and `glab` precedent.)
-2. **Token revocation on logout?** Should `registry logout` POST to a revocation endpoint if the registry advertises one? (Lean: yes, best-effort, don't fail logout if revocation fails.)
-3. **Scope negotiation?** Should the CLI request `registry:read registry:write` or just `registry:read`? (Lean: minimal scope, document extensibility.)
+1. **Client ID** — Single hardcoded `client_id="mcp-manager-cli"` as default, with `--client-id` override for enterprise registries. Zero-config for 95% of users; escape hatch for air-gapped deployments.
+2. **Token revocation on logout** — Yes. Attempt revocation via RFC 7009 endpoint if advertised in discovery. Always delete local profile. Print status: "Revoked on server... ✅" or "Server does not support revocation; token deleted locally."
+3. **Scope negotiation** — Minimal `registry:read` only. Future commands (`registry publish`) will trigger re-auth with broader scopes. Prevents admin approval friction in identity providers.
 
 ---
 
