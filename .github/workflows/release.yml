@@ -26,15 +26,45 @@ jobs:
       - name: Run tests
         run: pytest -q --no-header --tb=short
 
+      - name: Version guard
+        id: version_guard
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          CODE_VERSION=$(python -c "from mcp_manager import __version__; print(__version__)")
+          echo "Tag version:    $TAG_VERSION"
+          echo "Code version:   $CODE_VERSION"
+          if [ "$TAG_VERSION" != "$CODE_VERSION" ]; then
+            echo "::error::Version mismatch: tag says $TAG_VERSION but __version__ says $CODE_VERSION"
+            exit 1
+          fi
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Build package
         run: |
           pip install build
           python -m build
 
+      - name: Extract CHANGELOG section
+        id: changelog
+        run: |
+          VERSION="${{ steps.version_guard.outputs.version }}"
+          if python scripts/extract_changelog.py --version "$VERSION" > "$RUNNER_TEMP/changelog_body.md"; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            {
+              echo ''
+              echo '---'
+              echo '_Auto-generated release notes below:_'
+            } >> "$RUNNER_TEMP/changelog_body.md"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo '_Auto-generated release notes below:_' > "$RUNNER_TEMP/changelog_body.md"
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
+          body_path: ${{ runner.temp }}/changelog_body.md
           files: dist/*
 
       - name: Publish to PyPI

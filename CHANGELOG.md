@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-07-20
+
+### Added
+
+- **Persistent registry authentication** (`mcp-manager registry login` / `logout` / `auth-list`)
+  - Secure credential storage in `~/.mcp-manager/auth.json` with `0o600` permissions
+  - Bearer token and Basic auth profiles, masked in `auth-list` output
+  - Credential validation via HEAD request before storing (abort on 401/403, warn on 405)
+- **Env-var fallback for registry auth**
+  - `MCP_MANAGER_REGISTRY_TOKEN` — default Bearer token
+  - `MCP_MANAGER_REGISTRY_USER` / `MCP_MANAGER_REGISTRY_PASSWORD` — default Basic auth
+  - `MCP_MANAGER_AUTH_FILE` — override auth.json path
+- **Auth priority chain**: CLI flag > stored profile > env var > anonymous
+- **Release automation**: version guard, CHANGELOG extraction, and GitHub Release notes from `.github/workflows/release.yml`
+
+### Changed
+
+- **Version bumped to 0.7.0**
+
 ## [0.6.0] — 2026-07-20
 
 ### Added
