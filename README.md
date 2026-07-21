@@ -355,6 +355,12 @@ CI enforces all of the above. PRs that fail any gate will not merge.
 
 ---
 
+## Related Projects
+
+- **[animus](https://github.com/AreteDriver/animus)** — Personal AI operating environment with evidence-graded maturity and autonomous improvement
+- **[ai-spend](https://github.com/AreteDriver/ai-spend)** — Cross-provider AI cost aggregation (`pip install ai-spend`)
+- **[agent-lint](https://github.com/AreteDriver/agent-lint)** — Workflow YAML cost estimator + anti-pattern linter (`pip install agentlinter`)
+
 [Discord](https://discord.gg/fdzQkrt8) — Join the community
 
 *Part of the [AreteDriver](https://github.com/AreteDriver) AI tooling ecosystem.*
