@@ -27,6 +27,8 @@ The Model Context Protocol (MCP) is the open standard for connecting AI agents t
 
 No more manual copy-paste. No more "works on my machine" for AI tool configs.
 
+![mcp-manager demo](docs/assets/mcp-manager-demo.gif)
+
 ---
 
 ## The Problem
@@ -396,7 +398,6 @@ mcp-manager audit serve
 
 All probes use **benign handlers** — they register misleading metadata but return safe JSON markers. No actual harmful behavior is performed. This makes the audit safe to run against production configs.
 
-For details on the probe taxonomy and methodology, see the [mcp-fuzz integration decision](https://github.com/AreteDriver/notes/blob/main/decisions/2026-07.md).
 
 ---
 
