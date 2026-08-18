@@ -145,3 +145,17 @@ class TestWorkflowYaml:
         assert "Extract CHANGELOG section" in names
         assert "Create GitHub Release" in names
         assert "Publish to PyPI" in names
+
+    def test_validate_action_provisions_pinned_uv(self) -> None:
+        action = (
+            Path(__file__).parent.parent
+            / ".github"
+            / "actions"
+            / "mcp-manager-validate"
+            / "action.yml"
+        )
+        data = yaml.safe_load(action.read_text())
+        assert data["inputs"]["uv-version"]["default"] == "0.11.7"
+        steps = data["runs"]["steps"]
+        install_uv = next(step for step in steps if step.get("name") == "Install uv runtime")
+        assert "uv==${{ inputs.uv-version }}" in install_uv["run"]
