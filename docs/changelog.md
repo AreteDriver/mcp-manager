@@ -1,92 +1,14 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+The repository-root
+[CHANGELOG.md](https://github.com/AreteDriver/mcp-manager/blob/main/CHANGELOG.md)
+is the canonical release history. Keeping one source avoids version and path
+drift between the package and documentation site.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## 0.9.0 Highlights
 
-## [Unreleased]
-
-## [0.4.0] — 2026-07-20
-
-### Added
-
-- **Server Marketplace** (`mcp-manager search`, `info`, `install`)
-  - Curated directory of MCP servers with quality metadata
-  - Health pass rate, tool count, last updated, license, verified status
-  - Auto-lock on install: resolved versions written to `.mcp-manager.lock`
-  - Dry-run support: `mcp-manager install <name> --dry-run`
-  - SSE transport support in marketplace entries
-  - Marketplace quality scores CI gate (B threshold)
-  - Marketplace refresh with health check validation
-- **CONTRIBUTING.md** — contributor quickstart, preflight checklist, code style, conventional commits, PR process, security reporting
-- **Registry durability assessment** (`docs/design/registry-durability.md`) — evaluates JSON/SQLite/YAML choices across registry, telemetry, and lockfile
-
-### Changed
-
-- **CLI architecture refactored** — `cli.py` reduced from 1,070 lines to 319 lines (70% reduction)
-  - Extracted command implementations into `commands/` subpackage:
-    - `commands/common.py` — shared console, discovery, registry helpers
-    - `commands/servers.py` — list, map, health, add, remove, test, export, import, status
-    - `commands/ops.py` — sync, validate, monitor, stats, lock
-    - `commands/project.py` — project init, validate, export
-    - `commands/marketplace.py` — search, info, install, refresh
-  - Zero breaking changes — all `@app.command()` registrations preserved
-- **Project config env var syntax expanded**
-  - `${VAR:-default}` — falls back to `default` if `VAR` is unset
-  - `${VAR:?required}` — raises `WritebackError` if `VAR` is unset
-  - Validation skips `:-` vars (explicit default) but flags bare `$VAR` and `:?` vars
-- **Exception handling narrowed** across 6 modules:
-  - `health.py` — specific types: `OSError`, `TimeoutError`, `ProtocolError`, `json.JSONDecodeError`, `ValidationError`
-  - `registry.py` — `ValidationError`, `TypeError`, `KeyError`
-  - `lockfile.py` — `URLError`, `HTTPError`, `json.JSONDecodeError`, `TimeoutError`
-  - `exporters.py` — `ValidationError`, `KeyError`, `TypeError`
-  - `marketplace.py` — `yaml.YAMLError`, `OSError`, `TimeoutError`, `ValueError`
-  - `monitor.py` — `OSError` (timeout already handled upstream)
-- **Stdio handshake deduplicated** in `health.py` — extracted `_stdio_spawn()`, `_stdio_init_sequence()`, `_stdio_cleanup()`, `_stdio_ping_handshake()` shared between shallow and deep health checks
-
-### Fixed
-
-- `ruff` and `mypy` now clean across entire codebase (no outstanding lint)
-- `TimeoutError` standardized to builtin (replaced `asyncio.TimeoutError` per UP041)
-- Test patch targets updated to match new `commands/` module paths
-- Unawaited coroutine warning suppressed in marketplace refresh tests
-
-## [0.3.0] — 2026-07-17
-
-### Added
-
-- **Server auto-restart monitor** (`mcp-manager monitor`) — keeps stdio servers alive with exponential backoff restart
-- **CI gate / GitHub Action** (`mcp-manager validate`) — fast config validation as composite action at `.github/actions/mcp-manager-validate`
-- Telemetry store with SQLite WAL mode for append-only event logging
-
-### Changed
-
-- `setuptools` deprecation warnings resolved
-- GitHub Actions bumped to SHA-pinned v7
-
-## [0.2.0] — 2026-07-14
-
-### Added
-
-- **Project-scoped MCP configuration** — `.mcp-manager.yml` in repo root with env var resolution and validation
-- **Cross-IDE config portability (write-back)** — atomic IDE config writes with backups and dry-run
-  - Claude Code (`~/.claude.json`)
-  - Claude Desktop (`~/.config/Claude/claude_desktop_config.json`)
-  - Cursor (`~/.cursor/mcp.json`)
-  - Windsurf (`~/.windsurf/mcp_config.json`)
-  - Project-level (`.mcp.json`)
-- **Deep health checks** — dependency validation and `tools/list` verification (`mcp-manager health --deep`)
-- **Version pinning / lockfile** — `mcp-manager lock` writes `.mcp-manager.lock` with resolved versions; `mcp-manager lock --check` for CI gate
-
-### Security
-
-- Added `SECURITY.md`
-- Pinned GitHub Actions to SHA commits
-- Added `.env` and credential patterns to `.gitignore`
-- Security workflow: `pip-audit` + `bandit` on push/PR
-
-[Unreleased]: https://github.com/AreteDriver/mcp-manager/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/AreteDriver/mcp-manager/releases/tag/v0.2.0
+- Native Codex TOML discovery and write-back
+- Target capabilities via `mcp-manager targets`
+- Static JSON/TOML, path, and environment diagnostics via `mcp-manager doctor`
+- Official project scopes for Codex, Claude Code, and Cursor
+- Lossy-translation warnings and strict diagnostic parsing

@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+from mcp_manager.adapters import ConfigScope
 from mcp_manager.commands.common import (
     _STATUS_ICON,
     _STATUS_STYLE,
@@ -29,6 +30,7 @@ def install_impl(
     force: bool,
     verify: bool,
     project: Path | None,
+    scope: str = "user",
 ) -> None:
     """Install a single server from the registry into IDE config(s)."""
     track_command("server_install")
@@ -48,6 +50,10 @@ def install_impl(
     # 2. Determine target IDEs.
     writeback = ConfigWriteback()
     supported = set(writeback.get_supported_ides())
+    if scope not in {"user", "project"}:
+        raise McpManagerError("Scope must be 'user' or 'project'")
+    target_scope: ConfigScope = "project" if scope == "project" else "user"
+    target_project = project or Path.cwd()
 
     if ide:
         if ide not in supported:
@@ -58,22 +64,31 @@ def install_impl(
             raise McpManagerError(f"Unknown IDE: {ide}")
         targets = [ide]
     elif all_ides:
-        targets = sorted(supported)
+        targets = [
+            name for name in sorted(supported) if writeback.supports_scope(name, target_scope)
+        ]
     else:
-        targets = _auto_detect_targets(writeback, supported)
+        targets = _auto_detect_targets(
+            writeback,
+            supported,
+            scope=target_scope,
+            project_dir=target_project,
+        )
 
     if not targets:
         console.print(
-            "[yellow]No IDE configs detected.[/yellow]\n"
-            "[dim]Use --ide <name> to target a specific IDE, or --all to target all.[/dim]"
+            "[yellow]No client configs detected.[/yellow]\n"
+            "[dim]Use --ide <name> to target a specific client, or --all to target all.[/dim]"
         )
-        raise McpManagerError("No IDE configs detected")
+        raise McpManagerError("No client configs detected")
 
     # 3. Install per-target.
     results: list[tuple[str, Path | None, str, str | None]] = []
     # (ide_name, config_path_or_None, status, detail)
 
     for target_ide in targets:
+        for warning in writeback.translation_warnings(target_ide, [server]):
+            console.print(f"[yellow]{target_ide} translation warning:[/yellow] {warning}")
         result = _install_to_ide(
             writeback=writeback,
             ide=target_ide,
@@ -81,6 +96,8 @@ def install_impl(
             create=create,
             dry_run=dry_run,
             force=force,
+            scope=target_scope,
+            project_dir=target_project,
         )
         results.append((target_ide, *result))
 
@@ -99,16 +116,21 @@ def _get_registry() -> ServerRegistry:
     return reg
 
 
-def _auto_detect_targets(writeback: ConfigWriteback, supported: set[str]) -> list[str]:
+def _auto_detect_targets(
+    writeback: ConfigWriteback,
+    supported: set[str],
+    *,
+    scope: ConfigScope = "user",
+    project_dir: Path | None = None,
+) -> list[str]:
     """Return IDEs whose config files already exist on disk."""
-    discovery = ConfigDiscovery()
-    # We can simply check which IDE config paths exist.
     targets = []
     for ide_name in sorted(supported):
-        # ConfigWriteback doesn't expose path directly, but we can use discovery
-        # to see if any servers were found for this tool (meaning config exists).
-        found = discovery.discover_tool(ide_name)
-        if found:
+        try:
+            path = writeback.get_config_path(ide_name, scope=scope, project_dir=project_dir)
+        except WritebackError:
+            continue
+        if path is not None and path.is_file():
             targets.append(ide_name)
     return targets
 
@@ -120,6 +142,8 @@ def _install_to_ide(
     create: bool,
     dry_run: bool,
     force: bool,
+    scope: ConfigScope = "user",
+    project_dir: Path | None = None,
 ) -> tuple[Path | None, str, str | None]:
     """Install a single server to a single IDE. Returns (path, status, detail)."""
     from mcp_manager.models import McpServer
@@ -127,7 +151,7 @@ def _install_to_ide(
     assert isinstance(server, McpServer)
 
     # Check if config exists.
-    config_path = _get_config_path(writeback, ide)
+    config_path = _get_config_path(writeback, ide, scope=scope, project_dir=project_dir)
     config_exists = config_path is not None and config_path.exists()
 
     if not config_exists and not create:
@@ -137,24 +161,36 @@ def _install_to_ide(
     if config_exists and not force:
         # Use discovery to see if this server is already in the IDE.
         discovery = ConfigDiscovery()
-        existing = discovery.discover_tool(ide)
+        existing = discovery.discover_tool(ide, scope=scope, project_dir=project_dir)
         if any(s.name == server.name for s in existing):
             return (config_path, "skipped", "already installed (use --force)")
 
     try:
         if dry_run:
-            _ = writeback.preview(ide, [server])
+            _ = writeback.preview(ide, [server], scope=scope, project_dir=project_dir)
             return (config_path, "dry-run", None)
 
-        path = writeback.write_servers(ide, [server], create_if_missing=create)
+        path = writeback.write_servers(
+            ide,
+            [server],
+            create_if_missing=create,
+            scope=scope,
+            project_dir=project_dir,
+        )
         return (path, "installed", None)
     except WritebackError as exc:
         return (config_path, "error", str(exc))
 
 
-def _get_config_path(writeback: ConfigWriteback, ide: str) -> Path | None:
+def _get_config_path(
+    writeback: ConfigWriteback,
+    ide: str,
+    *,
+    scope: ConfigScope = "user",
+    project_dir: Path | None = None,
+) -> Path | None:
     """Return the expected config path for an IDE, or None if unknown."""
-    return writeback.get_config_path(ide)
+    return writeback.get_config_path(ide, scope=scope, project_dir=project_dir)
 
 
 def _render_results(
@@ -164,7 +200,7 @@ def _render_results(
     """Print a Rich table of install results."""
     action = "Would install" if dry_run else "Installed"
     count = sum(1 for _, _, status, _ in results if status in ("installed", "dry-run"))
-    console.print(f"\n{action} to {count} IDE(s):\n")
+    console.print(f"\n{action} to {count} client target(s):\n")
 
     for ide_name, path, status, detail in results:
         if status == "installed":

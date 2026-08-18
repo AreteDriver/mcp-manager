@@ -123,13 +123,32 @@ class ConfigWritebackTarget:
     def get_supported_ides(self) -> list[str]:
         return list(self._ide_configs.keys())
 
-    def get_config_path(self, ide: str) -> Path | None:
+    def get_config_path(
+        self,
+        ide: str,
+        *,
+        scope: str = "user",
+        project_dir: Path | None = None,
+    ) -> Path | None:
         info = self._ide_configs.get(ide)
         if info:
             return info[0]
         return None
 
-    def preview(self, ide: str, servers: list[Any]) -> dict[str, Any]:
+    def supports_scope(self, ide: str, scope: str) -> bool:
+        return ide in self._ide_configs and scope == "user"
+
+    def translation_warnings(self, ide: str, servers: list[Any]) -> list[str]:
+        return []
+
+    def preview(
+        self,
+        ide: str,
+        servers: list[Any],
+        *,
+        scope: str = "user",
+        project_dir: Path | None = None,
+    ) -> dict[str, Any]:
         config_path, wrapper_key = self._ide_configs[ide]
         if not config_path.exists():
             return {s.name: self._server_to_dict(s) for s in servers}
@@ -154,6 +173,8 @@ class ConfigWritebackTarget:
         *,
         create_if_missing: bool = False,
         dry_run: bool = False,
+        scope: str = "user",
+        project_dir: Path | None = None,
     ) -> Path:
         config_path, wrapper_key = self._ide_configs[ide]
         if dry_run:
@@ -220,7 +241,9 @@ def test_install_auto_detect_skips_missing_configs(
         mock_reg.return_value = instance
 
         # Patch discovery to simulate only cursor having a config.
-        def fake_discover_tool(tool: str) -> list[McpServer]:
+        def fake_discover_tool(
+            tool: str, *, scope: str = "user", project_dir: Path | None = None
+        ) -> list[McpServer]:
             if tool == "cursor":
                 return [
                     McpServer(
@@ -266,9 +289,7 @@ def test_install_all_with_create(tmp_path: Path, sample_server: McpServer) -> No
         wb._ide_configs = {"cursor": (cursor_path, None), "windsurf": (windsurf_path, None)}
 
         with patch("mcp_manager.commands.install.ConfigWriteback", new=lambda: wb):
-            result = runner.invoke(
-                app, ["server", "install", "my-server", "--all", "--create"]
-            )
+            result = runner.invoke(app, ["server", "install", "my-server", "--all", "--create"])
 
     assert result.exit_code == 0
     assert "Installed" in result.output
@@ -276,6 +297,34 @@ def test_install_all_with_create(tmp_path: Path, sample_server: McpServer) -> No
     assert windsurf_path.exists()
     data = json.loads(windsurf_path.read_text(encoding="utf-8"))
     assert "my-server" in data
+
+
+def test_install_cursor_project_scope(tmp_path: Path, sample_server: McpServer) -> None:
+    with patch("mcp_manager.commands.install.ServerRegistry") as mock_reg:
+        instance = MagicMock()
+        instance.get.return_value = RegistryEntry(server=sample_server)
+        mock_reg.return_value = instance
+
+        result = runner.invoke(
+            app,
+            [
+                "server",
+                "install",
+                "my-server",
+                "--ide",
+                "cursor",
+                "--scope",
+                "project",
+                "--project",
+                str(tmp_path),
+                "--create",
+            ],
+        )
+
+    assert result.exit_code == 0
+    project_config = tmp_path / ".cursor/mcp.json"
+    assert project_config.is_file()
+    assert json.loads(project_config.read_text())["mcpServers"]["my-server"]["command"] == "npx"
 
 
 def test_install_already_installed_no_force(tmp_path: Path, sample_server: McpServer) -> None:
@@ -297,9 +346,12 @@ def test_install_already_installed_no_force(tmp_path: Path, sample_server: McpSe
         wb = ConfigWritebackTarget()
         wb._ide_configs = {"cursor": (config_path, None)}
 
-        with patch("mcp_manager.commands.install.ConfigWriteback", new=lambda: wb), patch(
-            "mcp_manager.commands.install.ConfigDiscovery.discover_tool",
-            return_value=[existing_server],
+        with (
+            patch("mcp_manager.commands.install.ConfigWriteback", new=lambda: wb),
+            patch(
+                "mcp_manager.commands.install.ConfigDiscovery.discover_tool",
+                return_value=[existing_server],
+            ),
         ):
             result = runner.invoke(app, ["server", "install", "my-server", "--ide", "cursor"])
 
@@ -326,9 +378,12 @@ def test_install_already_installed_with_force(tmp_path: Path, sample_server: Mcp
         wb = ConfigWritebackTarget()
         wb._ide_configs = {"cursor": (config_path, None)}
 
-        with patch("mcp_manager.commands.install.ConfigWriteback", new=lambda: wb), patch(
-            "mcp_manager.commands.install.ConfigDiscovery.discover_tool",
-            return_value=[existing_server],
+        with (
+            patch("mcp_manager.commands.install.ConfigWriteback", new=lambda: wb),
+            patch(
+                "mcp_manager.commands.install.ConfigDiscovery.discover_tool",
+                return_value=[existing_server],
+            ),
         ):
             result = runner.invoke(
                 app, ["server", "install", "my-server", "--ide", "cursor", "--force"]
@@ -359,9 +414,12 @@ def test_install_verify_runs_health_check(tmp_path: Path, sample_server: McpServ
             transport=TransportType.STDIO,
         )
 
-        with patch("mcp_manager.commands.install.ConfigWriteback", new=lambda: wb), patch(
-            "mcp_manager.commands.install.HealthChecker.check",
-            new=AsyncMock(return_value=health_result),
+        with (
+            patch("mcp_manager.commands.install.ConfigWriteback", new=lambda: wb),
+            patch(
+                "mcp_manager.commands.install.HealthChecker.check",
+                new=AsyncMock(return_value=health_result),
+            ),
         ):
             result = runner.invoke(
                 app, ["server", "install", "my-server", "--ide", "cursor", "--verify"]
@@ -410,7 +468,7 @@ def test_install_no_ide_detected(sample_server: McpServer) -> None:
             result = runner.invoke(app, ["server", "install", "my-server"])
 
     assert result.exit_code == 1
-    assert "No IDE configs detected" in result.output
+    assert "No client configs detected" in result.output
 
 
 def test_install_network_config(tmp_path: Path) -> None:
@@ -454,9 +512,7 @@ def test_install_wrapper_key_merged(tmp_path: Path, sample_server: McpServer) ->
         wb._ide_configs = {"claude-code": (config_path, "mcpServers")}
 
         with patch("mcp_manager.commands.install.ConfigWriteback", new=lambda: wb):
-            result = runner.invoke(
-                app, ["server", "install", "my-server", "--ide", "claude-code"]
-            )
+            result = runner.invoke(app, ["server", "install", "my-server", "--ide", "claude-code"])
 
     assert result.exit_code == 0
     data = json.loads(config_path.read_text(encoding="utf-8"))

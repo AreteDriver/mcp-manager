@@ -192,9 +192,11 @@ class TestWriteServersExistingFile:
         fake_path = tmp_path / "claude.json"
         fake_path.write_text(json.dumps({"mcpServers": {}}))
         writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
-        with patch("mcp_manager.writeback.shutil.copy2", side_effect=OSError("read-only")):
-            with pytest.raises(WritebackError, match="Failed to create backup"):
-                writeback.write_servers("claude-code", [sample_stdio_server])
+        with (
+            patch("mcp_manager.writeback.shutil.copy2", side_effect=OSError("read-only")),
+            pytest.raises(WritebackError, match="Failed to create backup"),
+        ):
+            writeback.write_servers("claude-code", [sample_stdio_server])
 
     def test_atomic_write_os_error(
         self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer
@@ -202,9 +204,11 @@ class TestWriteServersExistingFile:
         fake_path = tmp_path / "claude.json"
         fake_path.write_text(json.dumps({"mcpServers": {}}))
         writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
-        with patch("mcp_manager.writeback.tempfile.mkstemp", side_effect=OSError("disk full")):
-            with pytest.raises(WritebackError, match="Failed to write"):
-                writeback.write_servers("claude-code", [sample_stdio_server])
+        with (
+            patch("mcp_manager.writeback.tempfile.mkstemp", side_effect=OSError("disk full")),
+            pytest.raises(WritebackError, match="Failed to write"),
+        ):
+            writeback.write_servers("claude-code", [sample_stdio_server])
 
     def test_non_dict_config_file(
         self, tmp_path: Path, writeback: ConfigWriteback, sample_stdio_server: McpServer

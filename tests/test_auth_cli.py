@@ -56,9 +56,7 @@ class TestRegistryLogin:
         assert profile.password == "wonderland"
 
     def test_login_requires_token_or_password(self) -> None:
-        result = runner.invoke(
-            app, ["registry", "login", "https://reg.example.com/mcp.yaml"]
-        )
+        result = runner.invoke(app, ["registry", "login", "https://reg.example.com/mcp.yaml"])
         assert result.exit_code == 1
         assert "Provide --token" in result.output
 
@@ -94,9 +92,7 @@ class TestRegistryLogout:
         store.add("https://reg.example.com/mcp.yaml", AuthProfile(type=AuthType.BEARER, token="t"))
         store.save()
         with patch("mcp_manager.auth.AUTH_FILE", auth_file):
-            result = runner.invoke(
-                app, ["registry", "logout", "https://reg.example.com/mcp.yaml"]
-            )
+            result = runner.invoke(app, ["registry", "logout", "https://reg.example.com/mcp.yaml"])
         assert result.exit_code == 0
         assert "Removed" in result.output
         store.load()
@@ -105,9 +101,7 @@ class TestRegistryLogout:
     def test_logout_not_found(self, tmp_path: Path) -> None:
         auth_file = tmp_path / "auth.json"
         with patch("mcp_manager.auth.AUTH_FILE", auth_file):
-            result = runner.invoke(
-                app, ["registry", "logout", "https://reg.example.com/mcp.yaml"]
-            )
+            result = runner.invoke(app, ["registry", "logout", "https://reg.example.com/mcp.yaml"])
         assert result.exit_code == 0
         assert "No credentials found" in result.output
 
@@ -136,7 +130,6 @@ class TestRegistryAuthList:
         assert "secrettoken" not in result.output  # masked
 
 
-
 class TestRegistryLoginValidation:
     """Tests for credential validation in registry login."""
 
@@ -146,18 +139,18 @@ class TestRegistryLoginValidation:
             patch("mcp_manager.auth.AUTH_FILE", auth_file),
             patch("mcp_manager.commands.auth_cmd.httpx.head") as mock_head,
         ):
-                mock_head.return_value.status_code = 401
-                mock_head.return_value.reason_phrase = "Unauthorized"
-                result = runner.invoke(
-                    app,
-                    [
-                        "registry",
-                        "login",
-                        "https://reg.example.com/mcp.yaml",
-                        "--token",
-                        "bad",
-                    ],
-                )
+            mock_head.return_value.status_code = 401
+            mock_head.return_value.reason_phrase = "Unauthorized"
+            result = runner.invoke(
+                app,
+                [
+                    "registry",
+                    "login",
+                    "https://reg.example.com/mcp.yaml",
+                    "--token",
+                    "bad",
+                ],
+            )
         assert result.exit_code == 1
         assert "Authentication failed" in result.output
         assert "401" in result.output
@@ -172,18 +165,18 @@ class TestRegistryLoginValidation:
             patch("mcp_manager.auth.AUTH_FILE", auth_file),
             patch("mcp_manager.commands.auth_cmd.httpx.head") as mock_head,
         ):
-                mock_head.return_value.status_code = 200
-                mock_head.return_value.reason_phrase = "OK"
-                result = runner.invoke(
-                    app,
-                    [
-                        "registry",
-                        "login",
-                        "https://reg.example.com/mcp.yaml",
-                        "--token",
-                        "good",
-                    ],
-                )
+            mock_head.return_value.status_code = 200
+            mock_head.return_value.reason_phrase = "OK"
+            result = runner.invoke(
+                app,
+                [
+                    "registry",
+                    "login",
+                    "https://reg.example.com/mcp.yaml",
+                    "--token",
+                    "good",
+                ],
+            )
         assert result.exit_code == 0
         assert "Saved bearer" in result.output
         store = AuthStore(path=auth_file)
@@ -196,19 +189,19 @@ class TestRegistryLoginValidation:
             patch("mcp_manager.auth.AUTH_FILE", auth_file),
             patch("mcp_manager.commands.auth_cmd.httpx.head") as mock_head,
         ):
-                mock_head.return_value.status_code = 405
-                mock_head.return_value.reason_phrase = "Method Not Allowed"
-                mock_head.return_value.is_success = False
-                result = runner.invoke(
-                    app,
-                    [
-                        "registry",
-                        "login",
-                        "https://reg.example.com/mcp.yaml",
-                        "--token",
-                        "tok",
-                    ],
-                )
+            mock_head.return_value.status_code = 405
+            mock_head.return_value.reason_phrase = "Method Not Allowed"
+            mock_head.return_value.is_success = False
+            result = runner.invoke(
+                app,
+                [
+                    "registry",
+                    "login",
+                    "https://reg.example.com/mcp.yaml",
+                    "--token",
+                    "tok",
+                ],
+            )
         assert result.exit_code == 0
         assert "Warning" in result.output
         assert "405" in result.output
@@ -219,6 +212,7 @@ class TestRegistryLoginValidation:
     def test_login_http_error_warns_and_stores(self, tmp_path: Path) -> None:
         auth_file = tmp_path / "auth.json"
         from httpx import HTTPError
+
         with (
             patch("mcp_manager.auth.AUTH_FILE", auth_file),
             patch(
@@ -226,16 +220,16 @@ class TestRegistryLoginValidation:
                 side_effect=HTTPError("connection refused"),
             ),
         ):
-                result = runner.invoke(
-                    app,
-                    [
-                        "registry",
-                        "login",
-                        "https://reg.example.com/mcp.yaml",
-                        "--token",
-                        "tok",
-                    ],
-                )
+            result = runner.invoke(
+                app,
+                [
+                    "registry",
+                    "login",
+                    "https://reg.example.com/mcp.yaml",
+                    "--token",
+                    "tok",
+                ],
+            )
         assert result.exit_code == 0
         assert "Warning" in result.output
         store = AuthStore(path=auth_file)
@@ -259,19 +253,19 @@ class TestEnvVarFallback:
             # no stored profile
             patch("mcp_manager.registry_sync.httpx.get") as mock_get,
         ):
-                mock_get.return_value.status_code = 200
-                mock_get.return_value.text = "servers: {}"
-                mock_get.return_value.raise_for_status = lambda: None
-                result = runner.invoke(
-                    app,
-                    [
-                        "registry",
-                        "diff",
-                        "https://example.com/registry.yaml",
-                        "--project-dir",
-                        str(project_dir),
-                    ],
-                )
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = "servers: {}"
+            mock_get.return_value.raise_for_status = lambda: None
+            result = runner.invoke(
+                app,
+                [
+                    "registry",
+                    "diff",
+                    "https://example.com/registry.yaml",
+                    "--project-dir",
+                    str(project_dir),
+                ],
+            )
         assert result.exit_code == 0
         _, kwargs = mock_get.call_args
         assert kwargs["headers"]["Authorization"] == "Bearer envtok"
@@ -289,19 +283,19 @@ class TestEnvVarFallback:
             patch("mcp_manager.auth.AUTH_FILE", auth_file),
             patch("mcp_manager.registry_sync.httpx.get") as mock_get,
         ):
-                mock_get.return_value.status_code = 200
-                mock_get.return_value.text = "servers: {}"
-                mock_get.return_value.raise_for_status = lambda: None
-                result = runner.invoke(
-                    app,
-                    [
-                        "registry",
-                        "diff",
-                        "https://example.com/registry.yaml",
-                        "--project-dir",
-                        str(project_dir),
-                    ],
-                )
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = "servers: {}"
+            mock_get.return_value.raise_for_status = lambda: None
+            result = runner.invoke(
+                app,
+                [
+                    "registry",
+                    "diff",
+                    "https://example.com/registry.yaml",
+                    "--project-dir",
+                    str(project_dir),
+                ],
+            )
         assert result.exit_code == 0
         _, kwargs = mock_get.call_args
         assert kwargs["headers"]["Authorization"].startswith("Basic ")
@@ -318,21 +312,21 @@ class TestEnvVarFallback:
             patch("mcp_manager.auth.AUTH_FILE", auth_file),
             patch("mcp_manager.registry_sync.httpx.get") as mock_get,
         ):
-                mock_get.return_value.status_code = 200
-                mock_get.return_value.text = "servers: {}"
-                mock_get.return_value.raise_for_status = lambda: None
-                result = runner.invoke(
-                    app,
-                    [
-                        "registry",
-                        "diff",
-                        "https://example.com/registry.yaml",
-                        "--project-dir",
-                        str(project_dir),
-                        "--token",
-                        "clitok",
-                    ],
-                )
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = "servers: {}"
+            mock_get.return_value.raise_for_status = lambda: None
+            result = runner.invoke(
+                app,
+                [
+                    "registry",
+                    "diff",
+                    "https://example.com/registry.yaml",
+                    "--project-dir",
+                    str(project_dir),
+                    "--token",
+                    "clitok",
+                ],
+            )
         assert result.exit_code == 0
         _, kwargs = mock_get.call_args
         assert kwargs["headers"]["Authorization"] == "Bearer clitok"
@@ -343,6 +337,7 @@ class TestEnvVarFallback:
 
         # Need to reload auth module to pick up env var.
         import mcp_manager.auth as auth_mod
+
         importlib.reload(auth_mod)
 
         store = auth_mod.AuthStore()
@@ -357,12 +352,14 @@ class TestEnvVarFallback:
         store2.load()
         assert store2.get("https://example.com/reg.yaml") is not None
 
+
 class TestPasswordStdin:
     """Tests for --password-stdin secure password input."""
 
     def test_read_password_stdin_piped(self) -> None:
         from io import StringIO
         from unittest.mock import patch
+
         from mcp_manager.commands.auth_cmd import _read_password_stdin
 
         with patch("sys.stdin", StringIO("secret\n")):
@@ -372,6 +369,7 @@ class TestPasswordStdin:
     def test_read_password_stdin_tty_returns_none(self) -> None:
         from io import StringIO
         from unittest.mock import patch
+
         from mcp_manager.commands.auth_cmd import _read_password_stdin
 
         fake_tty = StringIO("")
@@ -431,4 +429,3 @@ class TestPasswordStdin:
             )
         assert result.exit_code == 1
         assert "--password-stdin requires piped input" in result.output
-

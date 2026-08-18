@@ -350,7 +350,6 @@ class TestLoadServersFromConfig:
         assert servers[0].stdio_config is not None
         assert servers[0].stdio_config.env == {"SECRET": "$MISSING_VAR"}
 
-
     def test_loads_tags(self, tmp_path: Path) -> None:
         config = tmp_path / DEFAULT_FILENAME
         config.write_text(
@@ -471,9 +470,7 @@ class TestExtendsInheritance:
         base = tmp_path / "base.yml"
         base.write_text(yaml.dump({"servers": {"shared": {"command": "node"}}}))
         project = tmp_path / DEFAULT_FILENAME
-        project.write_text(
-            yaml.dump({"extends": f"file://{base}", "servers": {}})
-        )
+        project.write_text(yaml.dump({"extends": f"file://{base}", "servers": {}}))
         data = parse_project_config(project)
         assert "shared" in data["servers"]
 
@@ -481,10 +478,7 @@ class TestExtendsInheritance:
         from mcp_manager.project_config import _github_to_raw_url
 
         url = _github_to_raw_url("github:AreteDriver/mcp-manager/base.yml@v0.4.0")
-        assert (
-            url
-            == "https://raw.githubusercontent.com/AreteDriver/mcp-manager/v0.4.0/base.yml"
-        )
+        assert url == "https://raw.githubusercontent.com/AreteDriver/mcp-manager/v0.4.0/base.yml"
 
     def test_github_url_missing_ref_raises(self) -> None:
         from mcp_manager.project_config import _github_to_raw_url
@@ -496,14 +490,14 @@ class TestExtendsInheritance:
         def mock_get(url: str, **kwargs: Any) -> Any:
             class Resp:
                 text = yaml.dump({"servers": {"remote": {"command": "curl"}}})
+
                 def raise_for_status(self) -> None: ...
+
             return Resp()
 
         monkeypatch.setattr("httpx.get", mock_get)
         project = tmp_path / DEFAULT_FILENAME
-        project.write_text(
-            yaml.dump({"extends": "https://example.com/base.yml", "servers": {}})
-        )
+        project.write_text(yaml.dump({"extends": "https://example.com/base.yml", "servers": {}}))
         data = parse_project_config(project)
         assert "remote" in data["servers"]
 
@@ -513,9 +507,7 @@ class TestExtendsInheritance:
         base1.write_text(yaml.dump({"servers": {"a": {"command": "a"}}}))
         base2.write_text(yaml.dump({"servers": {"b": {"command": "b"}}}))
         project = tmp_path / DEFAULT_FILENAME
-        project.write_text(
-            yaml.dump({"extends": ["base1.yml", "base2.yml"], "servers": {}})
-        )
+        project.write_text(yaml.dump({"extends": ["base1.yml", "base2.yml"], "servers": {}}))
         data = parse_project_config(project)
         assert "a" in data["servers"]
         assert "b" in data["servers"]

@@ -15,6 +15,7 @@ from mcp_manager.telemetry import track_command
 
 logger = logging.getLogger(__name__)
 
+
 def login_oauth2_impl(url: str, client_id: str | None = None) -> None:
     """Perform OAuth2 device flow login for a registry URL."""
     track_command("registry_login_oauth2")
@@ -49,6 +50,7 @@ def login_oauth2_impl(url: str, client_id: str | None = None) -> None:
     expires_at = None
     if token_resp.expires_in is not None:
         import time as _time
+
         expires_at = _time.time() + token_resp.expires_in
 
     profile = AuthProfile(
@@ -164,6 +166,7 @@ def _validate_credentials(url: str, profile: AuthProfile) -> None:
 def _revoke_token(token: str, token_url: str) -> bool:
     """Attempt to revoke a token via RFC 7009. Returns True on success."""
     import httpx
+
     payload = {
         "token": token,
         "token_type_hint": "access_token",

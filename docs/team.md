@@ -14,10 +14,10 @@ mcp-manager init
 
 This:
 
-1. Detects their IDE (Claude Code, Cursor, Windsurf)
-2. Imports existing servers from their IDE config
+1. Detects their client targets (Codex, Claude Code, Cursor, Windsurf)
+2. Imports existing servers from client-native config
 3. Creates `.mcp-manager.yml` from a template
-4. Adds `.mcp-manager.yml` and `.mcp-manager.lock` to `.gitignore`
+4. Leaves `.mcp-manager.yml` and `.mcp-manager.lock` ready to commit for team sharing
 
 Non-interactive mode (for CI or scripts):
 

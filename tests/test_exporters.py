@@ -161,14 +161,16 @@ class TestImport:
     def test_import_skips_non_dict_entries(self, tmp_path: Path) -> None:
         f = tmp_path / "mixed.yaml"
         f.write_text(
-            yaml.dump({
-                "version": "1",
-                "servers": {
-                    "good": {"command": "npx"},
-                    "bad": "not a dict",
-                    "also_bad": ["list"],
-                },
-            }),
+            yaml.dump(
+                {
+                    "version": "1",
+                    "servers": {
+                        "good": {"command": "npx"},
+                        "bad": "not a dict",
+                        "also_bad": ["list"],
+                    },
+                }
+            ),
             encoding="utf-8",
         )
         imported = import_servers(f)
@@ -178,13 +180,15 @@ class TestImport:
     def test_import_skips_invalid_server(self, tmp_path: Path) -> None:
         f = tmp_path / "partial.yaml"
         f.write_text(
-            yaml.dump({
-                "version": "1",
-                "servers": {
-                    "good": {"command": "npx"},
-                    "bad": {"command": "npx", "args": None},
-                },
-            }),
+            yaml.dump(
+                {
+                    "version": "1",
+                    "servers": {
+                        "good": {"command": "npx"},
+                        "bad": {"command": "npx", "args": None},
+                    },
+                }
+            ),
             encoding="utf-8",
         )
         imported = import_servers(f)

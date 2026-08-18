@@ -48,6 +48,17 @@ mcp-manager health --deep
 
 This spawns each stdio server, runs the MCP handshake, calls `tools/list`, and validates dependencies are on PATH.
 
+Static target diagnostics are faster and do not start servers:
+
+```bash
+mcp-manager targets
+mcp-manager doctor --project .
+```
+
+`doctor` validates native JSON/TOML syntax, executable and argument paths,
+working directories, and the presence of referenced environment variables. It
+never prints credential values.
+
 ---
 
 ## 4. Scaffold a Project Config
@@ -64,7 +75,7 @@ This will:
 1. Detect your installed IDE
 2. Offer to import existing servers
 3. Create `.mcp-manager.yml` with a template
-4. Update `.gitignore`
+4. Leave `.mcp-manager.yml` and `.mcp-manager.lock` ready to commit for team sharing
 
 Or skip the wizard and use a template directly:
 
@@ -89,6 +100,19 @@ mcp-manager sync --ide cursor
 ```
 
 Your Cursor config (`~/.cursor/mcp.json`) is updated atomically with a backup created first.
+
+Codex is a native TOML target:
+
+```bash
+mcp-manager sync --ide codex --dry-run
+mcp-manager sync --ide codex
+```
+
+To write a shared client-native project config, select project scope explicitly:
+
+```bash
+mcp-manager sync --ide cursor --scope project --project . --create
+```
 
 ---
 

@@ -48,6 +48,7 @@ from mcp_manager.commands.servers import (
     status_impl,
     test_server_impl,
 )
+from mcp_manager.commands.targets import doctor_impl, targets_impl
 from mcp_manager.commands.templates_cmd import (
     template_list_impl,
     template_use_impl,
@@ -146,9 +147,7 @@ def template_use(
     project_name: str = typer.Option(
         "my-project", "--project-name", help="Project name for the template."
     ),
-    force: bool = typer.Option(
-        False, "--force", "-f", help="Overwrite existing config."
-    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing config."),
 ) -> None:
     """Scaffold a .mcp-manager.yml from a built-in template."""
     target_dir = project_dir or Path.cwd()
@@ -179,8 +178,12 @@ def list_servers(
     """List all configured MCP servers across tools."""
     try:
         list_servers_impl(
-            tool=tool, transport=transport, project=project, json=json,
-            tag=tag, exclude_tag=exclude_tag,
+            tool=tool,
+            transport=transport,
+            project=project,
+            json=json,
+            tag=tag,
+            exclude_tag=exclude_tag,
         )
     except McpManagerError:
         raise typer.Exit(1) from None
@@ -217,8 +220,13 @@ def health(
     """Health check all servers (status, latency, version)."""
     try:
         health_impl(
-            server_name=server_name, timeout=timeout, project=project,
-            json=json, deep=deep, tag=tag, exclude_tag=exclude_tag,
+            server_name=server_name,
+            timeout=timeout,
+            project=project,
+            json=json,
+            deep=deep,
+            tag=tag,
+            exclude_tag=exclude_tag,
         )
     except McpManagerError:
         raise typer.Exit(1) from None
@@ -295,6 +303,29 @@ def status() -> None:
     status_impl()
 
 
+@app.command(name="targets")
+def targets(
+    json: bool = typer.Option(False, "--json", help="Output as JSON."),
+) -> None:
+    """List supported MCP client targets and capabilities."""
+    targets_impl(json=json)
+
+
+@app.command(name="doctor")
+def doctor(
+    target: str | None = typer.Option(None, "--target", "-t", help="Check one target."),
+    project: Path | None = typer.Option(
+        None, "--project", "-p", help="Also check project-scoped target configs."
+    ),
+    json: bool = typer.Option(False, "--json", help="Output as JSON."),
+) -> None:
+    """Diagnose target config syntax, paths, and credential presence."""
+    try:
+        doctor_impl(target=target, project=project, json=json)
+    except McpManagerError:
+        raise typer.Exit(1) from None
+
+
 @app.command()
 def stats(
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
@@ -308,7 +339,7 @@ def stats(
 
 @app.command(name="sync")
 def sync_servers(
-    ide: str = typer.Option(..., "--ide", "-i", help="IDE to sync configs to."),
+    ide: str = typer.Option(..., "--ide", "-i", help="Client target to sync config to."),
     project: Path | None = typer.Option(None, "--project", "-p", help="Project dir."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing."),
     create: bool = typer.Option(False, "--create", help="Create config file if missing."),
@@ -318,12 +349,18 @@ def sync_servers(
     exclude_tag: list[str] | None = typer.Option(
         None, "--exclude-tag", help="Exclude servers with this tag (repeatable)."
     ),
+    scope: str = typer.Option("user", "--scope", help="Target config scope: user or project."),
 ) -> None:
     """Write discovered MCP servers to an IDE config file."""
     try:
         sync_servers_impl(
-            ide=ide, project=project, dry_run=dry_run, create=create,
-            tag=tag, exclude_tag=exclude_tag,
+            ide=ide,
+            project=project,
+            dry_run=dry_run,
+            create=create,
+            tag=tag,
+            exclude_tag=exclude_tag,
+            scope=scope,
         )
     except McpManagerError:
         raise typer.Exit(1) from None
@@ -364,8 +401,11 @@ def monitor_servers(
     """Keep stdio MCP servers alive with auto-restart."""
     try:
         monitor_servers_impl(
-            project=project, restart_delay=restart_delay, json=json,
-            tag=tag, exclude_tag=exclude_tag,
+            project=project,
+            restart_delay=restart_delay,
+            json=json,
+            tag=tag,
+            exclude_tag=exclude_tag,
         )
     except McpManagerError:
         raise typer.Exit(1) from None
@@ -445,26 +485,15 @@ def marketplace_install(
 def server_install(
     name: str = typer.Argument(..., help="Server name from registry."),
     ide: str | None = typer.Option(
-        None, "--ide", "-i", help="Target IDE (cursor, claude-code, windsurf)."
+        None, "--ide", "-i", help="Client target (run `mcp-manager targets` to list)."
     ),
-    all_ides: bool = typer.Option(
-        False, "--all", help="Install to all supported IDEs."
-    ),
-    create: bool = typer.Option(
-        False, "--create", help="Create IDE config if missing."
-    ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Preview changes without writing."
-    ),
-    force: bool = typer.Option(
-        False, "--force", "-f", help="Overwrite if server already exists."
-    ),
-    verify: bool = typer.Option(
-        False, "--verify", help="Run health check after install."
-    ),
-    project: Path | None = typer.Option(
-        None, "--project", "-p", help="Project dir (for context)."
-    ),
+    all_ides: bool = typer.Option(False, "--all", help="Install to all supported IDEs."),
+    create: bool = typer.Option(False, "--create", help="Create IDE config if missing."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing."),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite if server already exists."),
+    verify: bool = typer.Option(False, "--verify", help="Run health check after install."),
+    project: Path | None = typer.Option(None, "--project", "-p", help="Project dir (for context)."),
+    scope: str = typer.Option("user", "--scope", help="Target config scope: user or project."),
 ) -> None:
     """Install a registry server into IDE config(s)."""
     try:
@@ -477,6 +506,7 @@ def server_install(
             force=force,
             verify=verify,
             project=project,
+            scope=scope,
         )
     except McpManagerError:
         raise typer.Exit(1) from None
@@ -486,20 +516,15 @@ def server_install(
 def server_uninstall(
     name: str = typer.Argument(..., help="Server name to uninstall."),
     ide: str | None = typer.Option(
-        None, "--ide", "-i", help="Target IDE (cursor, claude-code, windsurf)."
+        None, "--ide", "-i", help="Client target (run `mcp-manager targets` to list)."
     ),
-    all_ides: bool = typer.Option(
-        False, "--all", help="Uninstall from all IDEs that have it."
-    ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Preview changes without writing."
-    ),
-    force: bool = typer.Option(
-        False, "--force", "-f", help="Uninstall even if server is healthy."
-    ),
+    all_ides: bool = typer.Option(False, "--all", help="Uninstall from all IDEs that have it."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing."),
+    force: bool = typer.Option(False, "--force", "-f", help="Uninstall even if server is healthy."),
     project: Path | None = typer.Option(
         None, "--project", "-p", help="Project dir for discovery scope."
     ),
+    scope: str = typer.Option("user", "--scope", help="Target config scope: user or project."),
 ) -> None:
     """Uninstall a server from IDE config(s)."""
     try:
@@ -510,10 +535,10 @@ def server_uninstall(
             dry_run=dry_run,
             force=force,
             project=project,
+            scope=scope,
         )
     except McpManagerError:
         raise typer.Exit(1) from None
-
 
 
 @registry_app.command(name="login")
@@ -522,9 +547,7 @@ def registry_login(
     token: str | None = typer.Option(
         None, "--token", "-t", help="Bearer token for authentication."
     ),
-    user: str | None = typer.Option(
-        None, "--user", "-u", help="Username for basic auth."
-    ),
+    user: str | None = typer.Option(None, "--user", "-u", help="Username for basic auth."),
     pw: str | None = typer.Option(
         None,
         "--password",
@@ -533,9 +556,7 @@ def registry_login(
     pw_stdin: bool = typer.Option(
         False, "--password-stdin", help="Read password from stdin (secure)."
     ),
-    oauth2: bool = typer.Option(
-        False, "--oauth2", help="Force OAuth2 device flow login."
-    ),
+    oauth2: bool = typer.Option(False, "--oauth2", help="Force OAuth2 device flow login."),
     no_oauth2: bool = typer.Option(
         False, "--no-oauth2", help="Skip OAuth2 discovery, use token or auth."
     ),
@@ -572,6 +593,7 @@ def registry_login(
         else:
             # Auto-detect: try OAuth2 discovery
             from mcp_manager.oauth2 import discover_oauth2_endpoints
+
             if discover_oauth2_endpoints(url):
                 console.print(
                     "[green]Registry supports OAuth2 device flow.[/green] "
@@ -604,7 +626,7 @@ def registry_auth_list() -> None:
 
 
 @app.command(name="marketplace-refresh")
-def marketplace_refresh (
+def marketplace_refresh(
     output: Path = typer.Option(
         ..., "--output", "-o", help="Path to marketplace index.yaml to update."
     ),

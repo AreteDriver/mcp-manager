@@ -46,9 +46,7 @@ class TestInitWizard:
         )
         with (
             patch("mcp_manager.commands.init_wizard._is_tty", return_value=False),
-            patch(
-                "mcp_manager.commands.init_wizard._detect_ides", return_value=["cursor"]
-            ),
+            patch("mcp_manager.commands.init_wizard._detect_ides", return_value=["cursor"]),
             patch(
                 "mcp_manager.config.IDE_CONFIG_PATHS",
                 [("cursor", str(cursor_config), "mcpServers")],
@@ -74,9 +72,7 @@ class TestInitWizard:
     ) -> None:
         monkeypatch.chdir(tmp_path)
         with patch("mcp_manager.commands.init_wizard._is_tty", return_value=False):
-            result = runner.invoke(
-                app, ["init", "--yes", "--template", "nonexistent"]
-            )
+            result = runner.invoke(app, ["init", "--yes", "--template", "nonexistent"])
         assert result.exit_code == 1
         assert "Unknown template" in result.output
 
@@ -91,7 +87,9 @@ class TestInitWizard:
         assert result.exit_code == 0
         assert "already exists" in result.output or "Use --yes" in result.output
 
-    def test_init_updates_gitignore(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_preserves_gitignore(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
@@ -100,18 +98,30 @@ class TestInitWizard:
         with patch("mcp_manager.commands.init_wizard._is_tty", return_value=False):
             result = runner.invoke(app, ["init", "--yes"])
         assert result.exit_code == 0
-        text = gitignore.read_text()
-        assert ".mcp-manager.yml" in text
-        assert ".mcp-manager.lock" in text
+        assert gitignore.read_text() == "*.pyc\n"
 
-    def test_init_creates_gitignore(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_does_not_create_gitignore(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
         with patch("mcp_manager.commands.init_wizard._is_tty", return_value=False):
             result = runner.invoke(app, ["init", "--yes"])
         assert result.exit_code == 0
+        assert not (tmp_path / ".gitignore").exists()
+
+    def test_init_warns_when_team_config_is_ignored(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".git").mkdir()
         gitignore = tmp_path / ".gitignore"
-        assert gitignore.exists()
-        text = gitignore.read_text()
-        assert ".mcp-manager.yml" in text
+        gitignore.write_text(".mcp-manager.yml\n.mcp-manager.lock\n")
+
+        with patch("mcp_manager.commands.init_wizard._is_tty", return_value=False):
+            result = runner.invoke(app, ["init", "--yes"])
+
+        assert result.exit_code == 0
+        assert "Team config is ignored by Git" in result.output
+        assert gitignore.read_text() == ".mcp-manager.yml\n.mcp-manager.lock\n"

@@ -48,9 +48,7 @@ class ProbeCase:
 
     def __post_init__(self) -> None:
         if self.category not in CATEGORIES:
-            raise ValueError(
-                f"category must be one of {sorted(CATEGORIES)}, got {self.category}"
-            )
+            raise ValueError(f"category must be one of {sorted(CATEGORIES)}, got {self.category}")
         if not self.probe_id or not self.registered_name:
             raise ValueError("probe_id and registered_name are required")
         if not self.safe_payload:

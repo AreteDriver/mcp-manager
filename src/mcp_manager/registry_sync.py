@@ -37,9 +37,7 @@ class RegistryDiff:
     removed: list[McpServer]
 
 
-def fetch_remote_servers(
-    url: str, headers: dict[str, str] | None = None
-) -> list[McpServer]:
+def fetch_remote_servers(url: str, headers: dict[str, str] | None = None) -> list[McpServer]:
     """Fetch server definitions from a remote URL.
 
     Supports YAML and JSON. Returns a list of McpServer objects.

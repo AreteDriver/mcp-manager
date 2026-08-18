@@ -39,8 +39,7 @@ def template_use_impl(
     """
     if name not in list_templates():
         console.print(
-            f"[red]Unknown template:[/red] {name}. "
-            "Run `mcp-manager template list` to see options."
+            f"[red]Unknown template:[/red] {name}. Run `mcp-manager template list` to see options."
         )
         raise McpManagerError(
             f"Unknown template: {name}. Run `mcp-manager template list` to see options."
@@ -49,9 +48,7 @@ def template_use_impl(
     config_path = project_dir / DEFAULT_FILENAME
     if config_path.exists() and not force:
         console.print(f"[red]{config_path} already exists.[/red] Use --force to overwrite.")
-        raise McpManagerError(
-            f"{config_path} already exists. Use --force to overwrite."
-        )
+        raise McpManagerError(f"{config_path} already exists. Use --force to overwrite.")
 
     yaml_text = get_template(name, project_name=project_name)
     config_path.write_text(yaml_text, encoding="utf-8")

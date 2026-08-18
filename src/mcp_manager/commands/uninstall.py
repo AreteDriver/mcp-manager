@@ -6,6 +6,7 @@ import asyncio
 import logging
 from pathlib import Path
 
+from mcp_manager.adapters import ConfigScope
 from mcp_manager.commands.common import (
     console,
 )
@@ -26,21 +27,38 @@ def uninstall_impl(
     dry_run: bool,
     force: bool,
     project: Path | None,
+    scope: str = "user",
 ) -> None:
     """Uninstall a server from IDE config(s)."""
     track_command("server_uninstall")
 
     # 1. Discover which IDEs have this server.
     discovery = ConfigDiscovery()
-    all_servers = discovery.discover_all(project_dir=project)
+    writeback = ConfigWriteback()
+    if scope not in {"user", "project"}:
+        raise McpManagerError("Scope must be 'user' or 'project'")
+    target_scope: ConfigScope = "project" if scope == "project" else "user"
+    target_project = project or Path.cwd()
+    if target_scope == "user":
+        all_servers = discovery.discover_all()
+    else:
+        all_servers = []
+        for target_name in writeback.get_supported_ides():
+            all_servers.extend(
+                discovery.discover_tool(
+                    target_name,
+                    scope=target_scope,
+                    project_dir=target_project,
+                )
+            )
     matches = [s for s in all_servers if s.name == name]
 
     if not matches:
         console.print(
-            f"[yellow]Server not found in any IDE config:[/yellow] {name}\n"
+            f"[yellow]Server not found in any client config:[/yellow] {name}\n"
             f"[dim]Use `mcp-manager list` to see configured servers.[/dim]"
         )
-        raise McpManagerError(f"Server not found in any IDE config: {name}")
+        raise McpManagerError(f"Server not found in any client config: {name}")
 
     # Group by source_tool (IDE).
     ide_to_servers: dict[str, list[McpServer]] = {}
@@ -48,7 +66,6 @@ def uninstall_impl(
         ide_to_servers.setdefault(s.source_tool, []).append(s)
 
     # 2. Determine target IDEs.
-    writeback = ConfigWriteback()
     supported = set(writeback.get_supported_ides())
 
     if ide:
@@ -82,6 +99,8 @@ def uninstall_impl(
             ide=target_ide,
             server_name=name,
             dry_run=dry_run,
+            scope=target_scope,
+            project_dir=target_project,
         )
         results.append((target_ide, *result))
 
@@ -112,10 +131,18 @@ def _uninstall_from_ide(
     ide: str,
     server_name: str,
     dry_run: bool,
+    scope: ConfigScope = "user",
+    project_dir: Path | None = None,
 ) -> tuple[Path | None, list[str], str | None]:
     """Remove a server from a single IDE. Returns (path, removed, detail)."""
     try:
-        path, removed = writeback.remove_servers(ide, {server_name}, dry_run=dry_run)
+        path, removed = writeback.remove_servers(
+            ide,
+            {server_name},
+            dry_run=dry_run,
+            scope=scope,
+            project_dir=project_dir,
+        )
         if not removed:
             return (path, [], "server not found in this IDE config")
         return (path, removed, None)
@@ -130,7 +157,7 @@ def _render_uninstall_results(
     """Print uninstall results."""
     action = "Would uninstall" if dry_run else "Uninstalled"
     count = sum(1 for _, _, removed, _ in results if removed)
-    console.print(f"\n{action} from {count} IDE(s):\n")
+    console.print(f"\n{action} from {count} client target(s):\n")
 
     for ide_name, path, removed, detail in results:
         if removed:

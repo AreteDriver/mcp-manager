@@ -43,6 +43,8 @@ class StdioConfig(BaseModel):
     command: str
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
+    cwd: str | None = None
+    env_vars: list[str | dict[str, str]] = Field(default_factory=list)
 
 
 class NetworkConfig(BaseModel):
@@ -51,6 +53,9 @@ class NetworkConfig(BaseModel):
     type: Literal["sse", "http"]
     url: str
     headers: dict[str, str] = Field(default_factory=dict)
+    env_headers: dict[str, str] = Field(default_factory=dict)
+    bearer_token_env_var: str | None = None
+    auth: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +80,18 @@ class McpServer(BaseModel):
     # User metadata.
     tags: list[str] = Field(default_factory=list)
     description: str = ""
+
+    # Cross-client policy fields. Targets may support only a subset; adapters
+    # expose capabilities so lossy translations can be reported explicitly.
+    enabled: bool | None = None
+    required: bool | None = None
+    enabled_tools: list[str] = Field(default_factory=list)
+    disabled_tools: list[str] = Field(default_factory=list)
+    default_tools_approval_mode: str | None = None
+    tool_approval_modes: dict[str, str] = Field(default_factory=dict)
+    startup_timeout_sec: float | None = None
+    tool_timeout_sec: float | None = None
+    extensions: dict[str, Any] = Field(default_factory=dict)
 
 
 class HealthResult(BaseModel):

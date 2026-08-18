@@ -1,5 +1,5 @@
 site_name: mcp-manager
-site_description: "Discover, health-check, and sync MCP servers across Claude Code, Cursor, Windsurf, and more."
+site_description: "Discover, diagnose, health-check, and sync MCP servers across Codex, Claude Code, Cursor, Windsurf, and more."
 site_url: https://aretedriver.github.io/mcp-manager/
 repo_url: https://github.com/AreteDriver/mcp-manager
 copyright: "Copyright &copy; 2026 AreteDriver"
@@ -44,11 +44,16 @@ nav:
   - Home: index.md
   - Quickstart: quickstart.md
   - Configuration: configuration.md
+  - Authentication: authentication.md
+  - Marketplace: marketplace.md
   - Team Features: team.md
-  - IDE Support: ide-support.md
+  - Client Targets: ide-support.md
   - Design:
+      - Target Adapters: design/target-adapters.md
       - OAuth2 Device Flow: design/oauth2-device-flow.md
       - Registry Durability: design/registry-durability.md
       - Marketplace Spec: design/spec-p5-marketplace.md
+  - Historical Plans:
+      - v0.5 Team Adoption: plan/v0.5.0-team-adoption.md
   - Contributing: contributing.md
   - Changelog: changelog.md

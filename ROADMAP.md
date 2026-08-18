@@ -1,7 +1,7 @@
 # MCP Manager Roadmap
 
-**Current version:** v0.7.1 — Auth hardening + review debt closure
-**Target:** v0.8.0 — OAuth2 device flow, token refresh, team RBAC
+**Current version:** v0.9.0 — Native multi-client adapters and diagnostics
+**Target:** v0.10.0 — Runtime diagnostics and MCP SDK 2.x migration
 
 ---
 
@@ -25,10 +25,11 @@ Atomic IDE config writes with backups and dry-run.
 
 | IDE | Config File | Read | Write |
 |-----|-------------|------|-------|
+| Codex | `~/.codex/config.toml` | ✅ | ✅ |
 | Claude Code | `~/.claude.json` | ✅ | ✅ |
-| Claude Desktop | `~/.config/Claude/claude_desktop_config.json` | ✅ | ✅ |
+| Claude Desktop | Platform-specific user config | ✅ | ✅ |
 | Cursor | `~/.cursor/mcp.json` | ✅ | ✅ |
-| Windsurf | `~/.windsurf/mcp_config.json` | ✅ | ✅ |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | ✅ | ✅ |
 | Project-level | `.mcp.json` | ✅ | ✅ |
 
 ### ✅ P3: Server Health Checking (Enhanced)
@@ -155,28 +156,42 @@ Curated directory of MCP servers with quality scores (health pass rate, tool cou
 | CI green (release workflow) | ✅ Complete | Tests + build + publish pass | GitHub Actions |
 | Zero test warnings | ✅ Complete | No RuntimeWarning or PytestUnknownMarkWarning | pytest |
 
-### v0.8.0 (Target)
+### v0.8.0 — "OAuth2 + MCP Audit" ✅ Shipped
 
-**Theme:** Enterprise auth and team governance.
+**Theme:** OAuth2 registry auth and MCP permission-prompt auditing.
+
+| Metric | Status | Measurement |
+|--------|--------|-------------|
+| OAuth2 device flow | ✅ Complete | `registry login --oauth2` tests |
+| Token refresh | ✅ Complete | Auth regression tests |
+| Permission-prompt audit | ✅ Complete | Built-in probe tests |
+
+### v0.9.0 — "Native Client Adapters" ✅ Shipped
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
-| OAuth2 device flow | `mcp-manager registry login --oauth2` | Design doc |
-| Token refresh | Auto-refresh before expiry | Prototype |
-| Team RBAC | Read-only vs admin registry roles | Design doc |
+| Native Codex TOML | Lossless settings/comments round trip | Adapter tests |
+| Target capabilities | Machine-readable `targets --json` | CLI tests |
+| Static diagnostics | JSON/TOML, path, and env checks | Doctor tests |
+| Project scope | Codex, Claude Code, Cursor | Integration tests |
+
+### v0.10.0 — "Runtime Diagnostics"
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| Deep target doctor | Optional native client/runtime verification | Integration tests |
+| Claude local scope | Private project-local config in `~/.claude.json` | Scope tests |
+| MCP SDK 2.x | Remove the temporary `<2.0` constraint | Full compatibility suite |
 
 ---
 
-## Why Now?
+## Next Design Priorities
 
-The MCP market window is open and closing:
-- Anthropic pushed MCP as an open standard (2024–2025)
-- Cursor and Windsurf adopted it for tool integration (2025)
-- GitHub Copilot is evaluating MCP support (rumored 2025 H2)
-- **No dominant player** exists in MCP server management
-
-The team that makes MCP configs as portable as `docker-compose.yml` wins this layer.
+- Add optional runtime client verification to `doctor` without coupling it to serialization.
+- Model Claude Code's private local scope separately from shared project scope.
+- Add fixture-based conformance tests against each client's published examples.
+- Migrate health and audit integrations to MCP SDK 2.x before relaxing the `<2.0` constraint.
 
 ---
 
-*Last updated: 2026-07-20*
+*Last updated: 2026-08-17*

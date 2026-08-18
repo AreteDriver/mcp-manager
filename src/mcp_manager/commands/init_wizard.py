@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 from mcp_manager.commands.common import console
 from mcp_manager.discovery import ConfigDiscovery
@@ -23,11 +24,11 @@ def _detect_ides() -> list[str]:
     return detected
 
 
-def _import_existing_servers(ide: str) -> dict[str, dict]:
+def _import_existing_servers(ide: str) -> dict[str, dict[str, Any]]:
     """Read servers from an IDE config file and return as project-config dict."""
     discovery = ConfigDiscovery()
     servers = discovery.discover_tool(ide)
-    result: dict[str, dict] = {}
+    result: dict[str, dict[str, Any]] = {}
     for s in servers:
         if s.stdio_config:
             result[s.name] = {
@@ -46,9 +47,9 @@ def _import_existing_servers(ide: str) -> dict[str, dict]:
     return result
 
 
-def _suggest_servers(ide: str | None) -> dict[str, dict]:
+def _suggest_servers(ide: str | None) -> dict[str, dict[str, Any]]:
     """Return a small set of recommended servers based on IDE."""
-    common: dict[str, dict] = {
+    common: dict[str, dict[str, Any]] = {
         "filesystem": {
             "command": "npx",
             "args": ["-y", "@modelcontextprotocol/server-filesystem"],
@@ -101,22 +102,20 @@ def _prompt_choice(question: str, choices: list[str], default: str | None = None
         console.print("[red]Invalid choice, try again.[/red]")
 
 
-def _update_gitignore(project_dir: Path) -> None:
-    """Add .mcp-manager.yml and .mcp-manager.lock to .gitignore if repo exists."""
-    git_dir = project_dir / ".git"
+def _warn_if_shared_files_ignored(project_dir: Path) -> None:
+    """Warn when Git ignores files intended for team sharing."""
     gitignore = project_dir / ".gitignore"
     entries = [".mcp-manager.yml", ".mcp-manager.lock"]
-
-    if not git_dir.is_dir():
+    if not gitignore.is_file():
         return
 
-    existing = gitignore.read_text(encoding="utf-8").splitlines() if gitignore.exists() else []
-    missing = [e for e in entries if e not in existing]
-    if missing:
-        with gitignore.open("a", encoding="utf-8") as f:
-            for e in missing:
-                f.write(f"{e}\n")
-        console.print(f"[green]Updated .gitignore[/green] with {', '.join(missing)}")
+    ignored = set(gitignore.read_text(encoding="utf-8").splitlines()).intersection(entries)
+    if ignored:
+        console.print(
+            "[yellow]Team config is ignored by Git:[/yellow] "
+            + ", ".join(sorted(ignored))
+            + "\n[dim]Remove those entries from .gitignore to share reproducible MCP config.[/dim]"
+        )
 
 
 def init_wizard_impl(
@@ -149,9 +148,7 @@ def init_wizard_impl(
             selected_ide = detected[0]
             console.print(f"[green]Detected IDE:[/green] {selected_ide}")
         elif _is_tty():
-            selected_ide = _prompt_choice(
-                "Which IDE are you using?", detected, default=detected[0]
-            )
+            selected_ide = _prompt_choice("Which IDE are you using?", detected, default=detected[0])
         else:
             selected_ide = detected[0]
 
@@ -170,7 +167,7 @@ def init_wizard_impl(
         raise McpManagerError(f"Unknown template: {selected_template}")
 
     # Build servers dict
-    servers: dict[str, dict] = {}
+    servers: dict[str, dict[str, Any]] = {}
 
     # Import existing if requested or auto-detected
     if import_existing and selected_ide:
@@ -206,4 +203,4 @@ def init_wizard_impl(
     config_path.write_text(yaml_text, encoding="utf-8")
     console.print(f"[green]Created {config_path}[/green] ({selected_template} template)")
 
-    _update_gitignore(project_dir)
+    _warn_if_shared_files_ignored(project_dir)

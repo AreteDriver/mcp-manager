@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from typing import Any
-from unittest.mock import MagicMock, patch
-
 import httpx
 import pytest
 import respx
@@ -13,11 +9,9 @@ import respx
 from mcp_manager.exceptions import McpManagerError
 from mcp_manager.oauth2 import (
     OAuth2DeviceFlow,
-    TokenResponse,
     _parse_token_response,
     discover_oauth2_endpoints,
 )
-
 
 # ---------------------------------------------------------------------------
 # Device Flow
@@ -131,7 +125,8 @@ class TestDeviceFlow:
     @respx.mock
     def test_poll_token_access_denied(self) -> None:
         respx.post("https://reg.example.com/oauth/token").respond(
-            200, json={"error": "access_denied"},
+            200,
+            json={"error": "access_denied"},
         )
         client = OAuth2DeviceFlow(
             "https://reg.example.com/oauth/device/code",
@@ -143,7 +138,8 @@ class TestDeviceFlow:
     @respx.mock
     def test_poll_token_expired(self) -> None:
         respx.post("https://reg.example.com/oauth/token").respond(
-            200, json={"error": "expired_token"},
+            200,
+            json={"error": "expired_token"},
         )
         client = OAuth2DeviceFlow(
             "https://reg.example.com/oauth/device/code",
@@ -173,7 +169,8 @@ class TestDeviceFlow:
     @respx.mock
     def test_refresh_error(self) -> None:
         respx.post("https://reg.example.com/oauth/token").respond(
-            400, json={"error": "invalid_grant"},
+            400,
+            json={"error": "invalid_grant"},
         )
         client = OAuth2DeviceFlow(
             "https://reg.example.com/oauth/device/code",
@@ -203,7 +200,9 @@ class TestDiscovery:
             },
         }
         respx.get("https://reg.example.com/mcp.yaml").respond(
-            200, json=manifest, headers={"content-type": "application/json"},
+            200,
+            json=manifest,
+            headers={"content-type": "application/json"},
         )
         endpoints = discover_oauth2_endpoints("https://reg.example.com/mcp.yaml")
         assert endpoints is not None
@@ -220,7 +219,9 @@ auth:
   token_endpoint: https://reg.example.com/token
 """
         respx.get("https://reg.example.com/mcp.yaml").respond(
-            200, text=yaml_text, headers={"content-type": "application/yaml"},
+            200,
+            text=yaml_text,
+            headers={"content-type": "application/yaml"},
         )
         endpoints = discover_oauth2_endpoints("https://reg.example.com/mcp.yaml")
         assert endpoints is not None
@@ -236,7 +237,8 @@ auth:
             ],
         }
         respx.get("https://reg.example.com/.well-known/oauth-authorization-server").respond(
-            200, json=well_known,
+            200,
+            json=well_known,
         )
         # No manifest auth block
         respx.get("https://reg.example.com/mcp.yaml").respond(404)
@@ -253,7 +255,8 @@ auth:
             "grant_types_supported": ["authorization_code"],
         }
         respx.get("https://reg.example.com/.well-known/oauth-authorization-server").respond(
-            200, json=well_known,
+            200,
+            json=well_known,
         )
         respx.get("https://reg.example.com/mcp.yaml").respond(404)
 
