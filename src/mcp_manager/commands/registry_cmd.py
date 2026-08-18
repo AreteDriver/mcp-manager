@@ -61,21 +61,15 @@ def _build_headers(
 @registry_app.command(name="diff")
 def registry_diff(
     url: str = typer.Argument(..., help="URL to remote registry YAML/JSON."),
-    project_dir: Path | None = typer.Option(
-        None, "--project-dir", "-p", help="Project directory."
-    ),
+    project_dir: Path | None = typer.Option(None, "--project-dir", "-p", help="Project directory."),
     token: str | None = typer.Option(
         None, "--token", "-t", help="Bearer token for authentication."
     ),
     header: list[str] | None = typer.Option(
         None, "--header", "-H", help="Custom header (repeatable)."
     ),
-    user: str | None = typer.Option(
-        None, "--user", "-u", help="Username for basic auth."
-    ),
-    password: str | None = typer.Option(
-        None, "--password", help="Password for basic auth."
-    ),
+    user: str | None = typer.Option(None, "--user", "-u", help="Username for basic auth."),
+    password: str | None = typer.Option(None, "--password", help="Password for basic auth."),
 ) -> None:
     """Preview changes from a remote registry without applying them."""
     from mcp_manager.telemetry import track_command
@@ -136,15 +130,9 @@ def registry_diff(
 @registry_app.command(name="pull")
 def registry_pull(
     url: str = typer.Argument(..., help="URL to remote registry YAML/JSON."),
-    project_dir: Path | None = typer.Option(
-        None, "--project-dir", "-p", help="Project directory."
-    ),
-    verify: bool = typer.Option(
-        False, "--verify", "-v", help="Run health checks before merging."
-    ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", "-n", help="Preview without writing."
-    ),
+    project_dir: Path | None = typer.Option(None, "--project-dir", "-p", help="Project directory."),
+    verify: bool = typer.Option(False, "--verify", "-v", help="Run health checks before merging."),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Preview without writing."),
     strategy: str = typer.Option(
         "union", "--strategy", "-s", help="Merge strategy: union or replace."
     ),
@@ -154,12 +142,8 @@ def registry_pull(
     header: list[str] | None = typer.Option(
         None, "--header", "-H", help="Custom header (repeatable)."
     ),
-    user: str | None = typer.Option(
-        None, "--user", "-u", help="Username for basic auth."
-    ),
-    password: str | None = typer.Option(
-        None, "--password", help="Password for basic auth."
-    ),
+    user: str | None = typer.Option(None, "--user", "-u", help="Username for basic auth."),
+    password: str | None = typer.Option(None, "--password", help="Password for basic auth."),
 ) -> None:
     """Pull server definitions from a remote registry into local project config."""
     from mcp_manager.telemetry import track_command

@@ -75,7 +75,7 @@ def test_uninstall_not_found() -> None:
     with patch("mcp_manager.discovery.ConfigDiscovery.discover_all", return_value=[]):
         result = runner.invoke(app, ["server", "uninstall", "missing"])
     assert result.exit_code == 1
-    assert "not found in any IDE config" in result.output
+    assert "not found in any client config" in result.output
 
 
 def test_uninstall_dry_run(ide_configs: dict[str, Path]) -> None:
@@ -216,9 +216,7 @@ def test_uninstall_writeback_error(ide_configs: dict[str, Path]) -> None:
         "remove_servers",
         side_effect=WritebackError("Disk full"),
     ):
-        result = runner.invoke(
-            app, ["server", "uninstall", "my-srv", "--ide", "cursor"]
-        )
+        result = runner.invoke(app, ["server", "uninstall", "my-srv", "--ide", "cursor"])
 
     assert result.exit_code == 0
     assert "Disk full" in result.output
@@ -230,7 +228,7 @@ def test_uninstall_no_ide_configs() -> None:
     with patch("mcp_manager.discovery.ConfigDiscovery.discover_all", return_value=[]):
         result = runner.invoke(app, ["server", "uninstall", "my-srv"])
     assert result.exit_code == 1
-    assert "not found in any IDE config" in result.output
+    assert "not found in any client config" in result.output
 
 
 def test_uninstall_all_flag(ide_configs: dict[str, Path]) -> None:
@@ -265,11 +263,36 @@ def test_uninstall_top_level_config(ide_configs: dict[str, Path]) -> None:
         patch("mcp_manager.discovery.IDE_CONFIG_PATHS", paths),
         patch("mcp_manager.writeback.IDE_CONFIG_PATHS", paths),
     ):
-        result = runner.invoke(
-            app, ["server", "uninstall", "my-srv", "--ide", "cursor"]
-        )
+        result = runner.invoke(app, ["server", "uninstall", "my-srv", "--ide", "cursor"])
 
     assert result.exit_code == 0
     data = json.loads(top_level_path.read_text(encoding="utf-8"))
     assert "my-srv" not in data
     assert "other" in data
+
+
+def test_uninstall_cursor_project_scope(tmp_path: Path) -> None:
+    project_config = tmp_path / ".cursor/mcp.json"
+    _write_config(
+        project_config,
+        {"mcpServers": {"my-srv": {"command": "npx"}}},
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "server",
+            "uninstall",
+            "my-srv",
+            "--ide",
+            "cursor",
+            "--scope",
+            "project",
+            "--project",
+            str(tmp_path),
+            "--force",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "my-srv" not in json.loads(project_config.read_text())["mcpServers"]

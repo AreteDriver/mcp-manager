@@ -58,6 +58,7 @@ class AuthProfile(BaseModel):
             return {"Authorization": f"Bearer {self.token}"}
         if self.type == AuthType.BASIC and self.user and self.password:
             import base64
+
             creds = base64.b64encode(f"{self.user}:{self.password}".encode()).decode()
             return {"Authorization": f"Basic {creds}"}
         return {}
@@ -154,6 +155,7 @@ def resolve_auth_headers(
         headers["Authorization"] = f"Bearer {cli_token}"
     elif cli_user and cli_password:
         import base64
+
         creds = base64.b64encode(f"{cli_user}:{cli_password}".encode()).decode()
         headers["Authorization"] = f"Basic {creds}"
     if cli_headers:
@@ -167,15 +169,18 @@ def resolve_auth_headers(
         # Auto-refresh OAuth2 tokens near expiry
         if profile.type == AuthType.OAUTH2 and profile.refresh_token and profile.token_url:
             import time as _time
+
             if profile.expires_at is not None and (_time.time() > profile.expires_at - 300):
                 try:
                     from mcp_manager.oauth2 import OAuth2DeviceFlow
+
                     flow = OAuth2DeviceFlow(
                         device_auth_url="",
                         token_url=profile.token_url,
                     )
                     refreshed = flow.refresh(profile.refresh_token)
                     import time as _time2
+
                     new_expires = (
                         _time2.time() + refreshed.expires_in if refreshed.expires_in else None
                     )
@@ -200,6 +205,7 @@ def resolve_auth_headers(
         return {"Authorization": f"Bearer {env_token}"}
     if env_user and env_password:
         import base64
+
         creds = base64.b64encode(f"{env_user}:{env_password}".encode()).decode()
         return {"Authorization": f"Basic {creds}"}
     return None

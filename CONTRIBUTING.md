@@ -35,7 +35,7 @@ pip-audit --desc
 ## What to Contribute
 
 - **Bug fixes** — especially for edge cases in config parsing, health checks, or IDE write-back.
-- **New IDE adapters** — add support for a new tool by implementing the write-back logic in `writeback.py`.
+- **New client adapters** — implement `TargetAdapter` under `src/mcp_manager/adapters/`, declare capabilities, and add round-trip/scope tests.
 - **Marketplace entries** — validated, well-documented MCP servers with install specs.
 - **Docs improvements** — README, `--help` text, or this file.
 

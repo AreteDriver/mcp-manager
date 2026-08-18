@@ -122,6 +122,22 @@ class TestScanProjectConfigs:
         assert len(result) == 1
         assert result[0].name == "test"
 
+    def test_walks_parents_for_official_claude_project_config(self, tmp_path: Path) -> None:
+        config = tmp_path / ".mcp.json"
+        config.write_text(
+            json.dumps({"mcpServers": {"test": {"command": "echo"}}}),
+            encoding="utf-8",
+        )
+
+        child = tmp_path / "src" / "app"
+        child.mkdir(parents=True)
+
+        result = self.discovery._scan_project_configs(child)
+
+        assert len(result) == 1
+        assert result[0].name == "test"
+        assert result[0].source_tool == "claude-code"
+
     def test_no_config_returns_empty(self, tmp_path: Path) -> None:
         result = self.discovery._scan_project_configs(tmp_path)
         assert result == []

@@ -16,26 +16,30 @@ runner = CliRunner()
 
 def _make_registry_file(path: Path) -> None:
     path.write_text(
-        yaml.dump({
-            "servers": {
-                "remote-fs": {
-                    "command": "npx",
-                    "args": ["-y", "@modelcontextprotocol/server-filesystem"],
-                },
-                "remote-slack": {"type": "sse", "url": "https://slack.example.com/sse"},
+        yaml.dump(
+            {
+                "servers": {
+                    "remote-fs": {
+                        "command": "npx",
+                        "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+                    },
+                    "remote-slack": {"type": "sse", "url": "https://slack.example.com/sse"},
+                }
             }
-        })
+        )
     )
 
 
 def _make_project_file(path: Path) -> None:
     path.write_text(
-        yaml.dump({
-            "project": "test",
-            "servers": {
-                "local-fs": {"command": "node", "args": ["local.js"]},
+        yaml.dump(
+            {
+                "project": "test",
+                "servers": {
+                    "local-fs": {"command": "node", "args": ["local.js"]},
+                },
             }
-        })
+        )
     )
 
 
@@ -72,11 +76,13 @@ class TestRegistryDiff:
         # Diff against a registry with only the local server
         registry = tmp_path / "registry.yaml"
         registry.write_text(
-            yaml.dump({
-                "servers": {
-                    "local-fs": {"command": "node", "args": ["local.js"]},
+            yaml.dump(
+                {
+                    "servers": {
+                        "local-fs": {"command": "node", "args": ["local.js"]},
+                    }
                 }
-            })
+            )
         )
 
         with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
@@ -162,6 +168,7 @@ class TestRegistryDiff:
         assert result.exit_code == 0
         _, kwargs = mock_get.call_args
         import base64
+
         expected = base64.b64encode(b"alice:wonderland").decode()
         assert kwargs["headers"]["Authorization"] == f"Basic {expected}"
 
@@ -334,11 +341,13 @@ class TestRegistryPull:
 
         registry = tmp_path / "registry.yaml"
         registry.write_text(
-            yaml.dump({
-                "servers": {
-                    "http-srv": {"type": "http", "url": "https://mcp.example.com/mcp"},
+            yaml.dump(
+                {
+                    "servers": {
+                        "http-srv": {"type": "http", "url": "https://mcp.example.com/mcp"},
+                    }
                 }
-            })
+            )
         )
 
         with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
@@ -377,11 +386,13 @@ class TestRegistryPull:
 
         registry = tmp_path / "registry.yaml"
         registry.write_text(
-            yaml.dump({
-                "servers": {
-                    "bad-srv": {"command": "/does/not/exist"},
+            yaml.dump(
+                {
+                    "servers": {
+                        "bad-srv": {"command": "/does/not/exist"},
+                    }
                 }
-            })
+            )
         )
 
         with patch("mcp_manager.registry_sync.httpx.get") as mock_get:

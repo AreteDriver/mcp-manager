@@ -14,8 +14,8 @@ servers:
     tags: [core, filesystem]
 
   git:
-    command: npx
-    args: ["-y", "@modelcontextprotocol/server-git"]
+    command: uvx
+    args: ["mcp-server-git", "--repository", "."]
     env: {{}}
     tags: [core, vcs]
 """,
@@ -30,8 +30,8 @@ servers:
     tags: [core, filesystem]
 
   git:
-    command: npx
-    args: ["-y", "@modelcontextprotocol/server-git"]
+    command: uvx
+    args: ["mcp-server-git", "--repository", "."]
     env: {{}}
     tags: [core, vcs]
 """,
@@ -53,8 +53,8 @@ servers:
     tags: [core, filesystem]
 
   git:
-    command: npx
-    args: ["-y", "@modelcontextprotocol/server-git"]
+    command: uvx
+    args: ["mcp-server-git", "--repository", "."]
     env: {{}}
     tags: [core, vcs]
 """,

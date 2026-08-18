@@ -51,8 +51,4 @@ def check_dependencies_all(servers: list[McpServer]) -> dict[str, list[str]]:
     Returns:
         Mapping of server name → list of missing binaries.
     """
-    return {
-        name: deps
-        for name, deps in ((s.name, check_dependencies(s)) for s in servers)
-        if deps
-    }
+    return {name: deps for name, deps in ((s.name, check_dependencies(s)) for s in servers) if deps}

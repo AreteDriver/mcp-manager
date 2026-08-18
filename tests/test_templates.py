@@ -50,9 +50,7 @@ class TestTemplateUse:
 
     def test_use_custom_project_name(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
-        result = runner.invoke(
-            app, ["template", "use", "python", "--project-name", "custom-name"]
-        )
+        result = runner.invoke(app, ["template", "use", "python", "--project-name", "custom-name"])
         assert result.exit_code == 0
         config = tmp_path / DEFAULT_FILENAME
         text = config.read_text()
@@ -100,6 +98,9 @@ class TestTemplateHelpers:
         assert "project: my-proj" in text
         assert "filesystem" in text
         assert "env: {}" in text
+        assert "command: uvx" in text
+        assert "mcp-server-git" in text
+        assert "@modelcontextprotocol/server-git" not in text
 
     def test_get_template_ai(self) -> None:
         text = get_template("ai", project_name="ai-proj")

@@ -9,7 +9,7 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import yaml
@@ -101,9 +101,7 @@ def parse_project_config(
         visited = _visited or set()
         canonical = str(path.resolve())
         if canonical in visited:
-            raise WritebackError(
-                f"Circular extends reference detected: {path}"
-            )
+            raise WritebackError(f"Circular extends reference detected: {path}")
         visited.add(canonical)
         raw = _resolve_extends(raw, path.parent, visited)
         visited.discard(canonical)
@@ -331,20 +329,15 @@ def _github_to_raw_url(source: str) -> str:
     rest = source[7:]  # strip "github:"
     if "@" not in rest:
         raise WritebackError(
-            f"GitHub source must include @ref: {source} "
-            "(e.g. github:owner/repo/file.yml@main)"
+            f"GitHub source must include @ref: {source} (e.g. github:owner/repo/file.yml@main)"
         )
     repo_path, ref = rest.rsplit("@", 1)
     # repo_path is like owner/repo/path/to/file.yml
     parts = repo_path.split("/", 2)
     if len(parts) < 3:
-        raise WritebackError(
-            f"GitHub source must be owner/repo/path: {source}"
-        )
+        raise WritebackError(f"GitHub source must be owner/repo/path: {source}")
     owner, repo, file_path = parts
-    return (
-        f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{file_path}"
-    )
+    return f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{file_path}"
 
 
 def _fetch_remote_config(
@@ -379,7 +372,7 @@ def _fetch_remote_config(
     if "extends" in raw:
         raw = _resolve_extends(raw, Path.cwd(), visited)
 
-    return raw
+    return cast(dict[str, Any], raw)
 
 
 def _extract_env_var_names(value: str) -> list[str]:

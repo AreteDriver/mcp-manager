@@ -26,6 +26,10 @@ inputs:
     description: "Path to the arete-mcp source directory (used when version=local)"
     required: false
     default: ""
+  uv-version:
+    description: "Pinned uv version used to provide uvx for Python MCP servers"
+    required: false
+    default: "0.11.7"
 
 runs:
   using: "composite"
@@ -45,6 +49,10 @@ runs:
         else
           pip install "arete-mcp==${{ inputs.version }}"
         fi
+
+    - name: Install uv runtime
+      shell: bash
+      run: python -m pip install "uv==${{ inputs.uv-version }}"
 
     - name: Validate .mcp-manager.yml
       shell: bash

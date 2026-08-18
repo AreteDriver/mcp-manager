@@ -1,10 +1,10 @@
 # mcp-manager
 
-**One CLI to discover, health-check, and sync MCP servers across Claude Code, Cursor, Windsurf, and more.**
+**One CLI to discover, diagnose, health-check, and sync MCP servers across Codex, Claude Code, Cursor, Windsurf, and more.**
 
 [![CI](https://github.com/AreteDriver/mcp-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/AreteDriver/mcp-manager/actions)
 [![CodeQL](https://github.com/AreteDriver/mcp-manager/actions/workflows/codeql.yml/badge.svg)](https://github.com/AreteDriver/mcp-manager/actions)
-[![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](https://github.com/AreteDriver/mcp-manager/actions)
+[![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/AreteDriver/mcp-manager/actions)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/arete-mcp.svg)](https://pypi.org/project/arete-mcp/)
@@ -33,12 +33,13 @@ No more manual copy-paste. No more "works on my machine" for AI tool configs.
 
 ## The Problem
 
-You use Claude Code, Cursor, and Windsurf. Each stores MCP servers in a different JSON file with a different schema.
+You use Codex, Claude Code, Cursor, and Windsurf. Each stores MCP servers in a different location, scope, or dialect.
 
 ```
 ~/.claude.json
 ~/.cursor/mcp.json
-~/.windsurf/mcp_config.json
+~/.codeium/windsurf/mcp_config.json
+~/.codex/config.toml
 ```
 
 Your team can't share configs via git. Switching projects means manual copy-paste. One IDE has a server the others don't. You have no idea which servers are actually healthy.
@@ -55,6 +56,10 @@ pip install arete-mcp
 
 # See every MCP server across every IDE
 mcp-manager list
+
+# See supported targets and diagnose stale paths or missing env vars
+mcp-manager targets
+mcp-manager doctor
 
 # Check if they actually work (not just "starts")
 mcp-manager health --deep
@@ -86,12 +91,12 @@ mcp-manager sync --ide cursor
 
 | | **mcp-manager** | **Other Managers** |
 |---|---|---|
-| **Config lives in repo** | ✅ `.mcp-manager.yml` committed with your code | ❌ Global per-IDE JSON files |
+| **Config lives in repo** | ✅ `.mcp-manager.yml` committed with your code | ❌ Global client-native config files |
 | **Atomic write-back** | ✅ Backups + dry-run before touching IDE configs | ❌ Direct overwrite, no rollback |
 | **Deep health checks** | ✅ Verifies `tools/list` responds, deps on PATH | ❌ "Process started" only |
 | **Zero daemon** | ✅ CLI-only, no background services | ❌ Some require persistent gateway/web UI |
 | **Python-native** | ✅ `pip install`, works wherever Python 3.11+ does | ❌ Node/Go binaries, extra tooling |
-| **Cross-IDE discovery** | ✅ Reads Claude, Cursor, Windsurf, project-level `.mcp.json` | ⚠️ Partial coverage |
+| **Cross-client discovery** | ✅ Reads Codex, Claude, Cursor, Windsurf, and project-scoped configs | ⚠️ Partial coverage |
 
 ---
 
@@ -100,10 +105,11 @@ mcp-manager sync --ide cursor
 ### 🔍 Discovery
 Reads MCP server configs from:
 - Claude Code (`~/.claude.json`)
-- Claude Desktop (`~/.config/Claude/claude_desktop_config.json`)
+- Claude Desktop (platform-specific user config)
 - Cursor (`~/.cursor/mcp.json`)
-- Windsurf (`~/.windsurf/mcp_config.json`)
-- Project-level (`.mcp.json`, walks parent dirs)
+- Windsurf (`~/.codeium/windsurf/mcp_config.json`)
+- Codex (`~/.codex/config.toml`)
+- Project-level Claude Code (`.mcp.json`, walks parent dirs)
 
 ### 🏥 Health Checks
 - **Fast**: Process spawn (stdio) or HTTP ping (SSE) — 10s timeout
@@ -111,10 +117,11 @@ Reads MCP server configs from:
 - **Batch**: Check all servers in parallel with `mcp-manager health`
 
 ### 📝 Config Write-Back (Atomic & Safe)
-- Writes discovered/merged configs back to IDE-specific JSON files
+- Writes discovered/merged configs through target-specific JSON or TOML adapters
 - **Atomic**: temp file + rename (never corrupts your IDE config)
 - **Backups**: `.mcp-manager-backup` created before any modification
 - **Dry-run**: Preview changes without touching disk
+- **Capability-aware**: rejects unsupported transports and warns about lossy policy/auth translations
 
 ### 🏪 Server Marketplace
 Discover and install curated MCP servers without hunting through GitHub:
@@ -248,6 +255,10 @@ mcp-manager remove my-server
 # Sync project config to IDE
 mcp-manager sync --ide cursor --dry-run
 mcp-manager sync --ide cursor
+mcp-manager sync --ide codex --dry-run
+
+# Write a client-native project config instead of a user config
+mcp-manager sync --ide codex --scope project --project . --create
 
 # Project-level MCP config
 mcp-manager project init              # Scaffold .mcp-manager.yml
@@ -303,15 +314,17 @@ Credentials are stored in `~/.mcp-manager/auth.json` with `0o600` permissions. Y
 
 ---
 
-## Supported IDEs
+## Supported Client Targets
 
-| IDE | Config Path | Write-Back |
-|-----|-------------|------------|
-| Claude Code | `~/.claude.json` | ✅ |
-| Claude Desktop | `~/.config/Claude/claude_desktop_config.json` | ✅ |
-| Cursor | `~/.cursor/mcp.json` | ✅ |
-| Windsurf | `~/.windsurf/mcp_config.json` | ✅ |
-| Project-level | `.mcp.json` (walks parent dirs) | ✅ |
+| Target | User Config | Project Config | Format | Write-Back |
+|--------|-------------|----------------|--------|------------|
+| Codex | `~/.codex/config.toml` | `.codex/config.toml` | TOML | ✅ |
+| Claude Code | `~/.claude.json` | `.mcp.json` | JSON | ✅ |
+| Claude Desktop | Platform-specific | — | JSON | ✅ |
+| Cursor | `~/.cursor/mcp.json` | `.cursor/mcp.json` | JSON | ✅ |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | — | JSON | ✅ |
+
+Run `mcp-manager targets` for the installed version's exact capability matrix.
 
 ---
 
@@ -325,7 +338,7 @@ Credentials are stored in `~/.mcp-manager/auth.json` with `0o600` permissions. Y
 
 ## Status
 
-- [x] Read-only config discovery across 5 IDE configs
+- [x] Read-only config discovery across 5 client targets
 - [x] Async health checks with timeout
 - [x] JSON registry with add/remove
 - [x] YAML/JSON export/import
@@ -343,6 +356,9 @@ Credentials are stored in `~/.mcp-manager/auth.json` with `0o600` permissions. Y
 - [x] Project templates (`mcp-manager template list` / `use`)
 - [x] Private registry authentication (`registry login` / `logout` / `auth-list`)
 - [x] MCP permission-prompt accuracy auditing (`mcp-manager audit`)
+- [x] Native Codex TOML adapter with policy/auth preservation
+- [x] Capability inventory and static target diagnostics (`targets`, `doctor`)
+- [x] User/project scoped writes for Codex, Claude Code, and Cursor
 
 See [ROADMAP.md](ROADMAP.md) for what's next.
 

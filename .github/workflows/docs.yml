@@ -3,6 +3,8 @@ name: Docs
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -25,7 +27,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install docs dependencies
-        run: pip install mkdocs mkdocs-material pymdown-extensions
+        run: pip install -e ".[docs]"
 
       - name: Build site
         run: mkdocs build --strict
@@ -36,6 +38,7 @@ jobs:
           path: site/
 
   deploy:
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
     environment:

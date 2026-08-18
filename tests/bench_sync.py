@@ -25,7 +25,9 @@ def _make_servers(n: int) -> list[McpServer]:
                 McpServer(
                     name=f"http-{i}",
                     transport=TransportType.HTTP,
-                    network_config=NetworkConfig(type="http", url=f"https://api{i}.example.com/mcp"),
+                    network_config=NetworkConfig(
+                        type="http", url=f"https://api{i}.example.com/mcp"
+                    ),
                 )
             )
         else:
@@ -33,7 +35,9 @@ def _make_servers(n: int) -> list[McpServer]:
                 McpServer(
                     name=f"sse-{i}",
                     transport=TransportType.SSE,
-                    network_config=NetworkConfig(type="sse", url=f"https://sse{i}.example.com/events"),
+                    network_config=NetworkConfig(
+                        type="sse", url=f"https://sse{i}.example.com/events"
+                    ),
                 )
             )
     return servers

@@ -43,15 +43,17 @@ class TestFetchRemoteServers:
     def test_fetch_yaml_success(self, tmp_path: Path) -> None:
         registry = tmp_path / "registry.yaml"
         registry.write_text(
-            yaml.dump({
-                "servers": {
-                    "fs": {
-                    "command": "npx",
-                    "args": ["-y", "@modelcontextprotocol/server-filesystem"],
-                },
-                    "slack": {"type": "sse", "url": "https://slack.example.com/sse"},
+            yaml.dump(
+                {
+                    "servers": {
+                        "fs": {
+                            "command": "npx",
+                            "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+                        },
+                        "slack": {"type": "sse", "url": "https://slack.example.com/sse"},
+                    }
                 }
-            })
+            )
         )
 
         # Use file:// URL to avoid real HTTP
@@ -69,14 +71,16 @@ class TestFetchRemoteServers:
     def test_fetch_json_success(self, tmp_path: Path) -> None:
         registry = tmp_path / "registry.json"
         registry.write_text(
-            json.dumps({
-                "servers": {
-                    "github": {
-                        "command": "npx",
-                        "args": ["-y", "@modelcontextprotocol/server-github"],
-                    },
+            json.dumps(
+                {
+                    "servers": {
+                        "github": {
+                            "command": "npx",
+                            "args": ["-y", "@modelcontextprotocol/server-github"],
+                        },
+                    }
                 }
-            })
+            )
         )
 
         with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
@@ -158,12 +162,14 @@ class TestFetchRemoteServers:
     def test_fetch_skips_non_dict_entries(self, tmp_path: Path) -> None:
         registry = tmp_path / "registry.yaml"
         registry.write_text(
-            yaml.dump({
-                "servers": {
-                    "good": {"command": "npx"},
-                    "bad": "not a dict",
+            yaml.dump(
+                {
+                    "servers": {
+                        "good": {"command": "npx"},
+                        "bad": "not a dict",
+                    }
                 }
-            })
+            )
         )
 
         with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
@@ -204,11 +210,13 @@ class TestComputeDiff:
 
     def test_updated_servers(self) -> None:
         local = [_make_stdio("a")]
-        remote = [McpServer(
-            name="a",
-            transport=TransportType.STDIO,
-            stdio_config=StdioConfig(command="node", args=["server.js"]),
-        )]
+        remote = [
+            McpServer(
+                name="a",
+                transport=TransportType.STDIO,
+                stdio_config=StdioConfig(command="node", args=["server.js"]),
+            )
+        ]
         diff = compute_diff(local, remote)
         assert len(diff.updated) == 1
         assert diff.updated[0][0].name == "a"
@@ -236,11 +244,13 @@ class TestMergeServers:
 
     def test_union_remote_wins_on_conflict(self) -> None:
         local = [_make_stdio("a")]
-        remote = [McpServer(
-            name="a",
-            transport=TransportType.HTTP,
-            network_config=NetworkConfig(type="http", url="https://remote.example.com"),
-        )]
+        remote = [
+            McpServer(
+                name="a",
+                transport=TransportType.HTTP,
+                network_config=NetworkConfig(type="http", url="https://remote.example.com"),
+            )
+        ]
         merged = merge_servers(local, remote, "union")
         assert len(merged) == 1
         assert merged[0].transport == TransportType.HTTP

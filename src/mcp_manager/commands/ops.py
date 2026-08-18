@@ -8,6 +8,7 @@ from pathlib import Path
 
 from rich.table import Table
 
+from mcp_manager.adapters import ConfigScope
 from mcp_manager.commands.common import (
     _discover,
     _filter_by_tags,
@@ -26,6 +27,7 @@ def sync_servers_impl(
     create: bool,
     tag: list[str] | None = None,
     exclude_tag: list[str] | None = None,
+    scope: str = "user",
 ) -> None:
     """Write discovered MCP servers to an IDE config file."""
     from mcp_manager.writeback import ConfigWriteback
@@ -44,14 +46,34 @@ def sync_servers_impl(
         return
 
     writeback = ConfigWriteback()
+    if scope not in {"user", "project"}:
+        raise McpManagerError("Scope must be 'user' or 'project'")
+    target_scope: ConfigScope = "project" if scope == "project" else "user"
+    target_project = project or Path.cwd()
+    for warning in writeback.translation_warnings(ide, servers):
+        console.print(f"[yellow]Translation warning:[/yellow] {warning}")
 
     if dry_run:
-        preview = writeback.preview(ide, servers)
-        console.print_json(json_mod.dumps(preview, indent=2))
+        preview = writeback.preview(
+            ide,
+            servers,
+            scope=target_scope,
+            project_dir=target_project,
+        )
+        if isinstance(preview, str):
+            console.print(preview, markup=False)
+        else:
+            console.print_json(json_mod.dumps(preview, indent=2))
         return
 
     try:
-        path = writeback.write_servers(ide, servers, create_if_missing=create)
+        path = writeback.write_servers(
+            ide,
+            servers,
+            create_if_missing=create,
+            scope=target_scope,
+            project_dir=target_project,
+        )
         console.print(f"[green]Synced {len(servers)} server(s) to[/green] {path}")
     except McpManagerError as exc:
         console.print(f"[red]Sync error:[/red] {exc}")

@@ -413,15 +413,17 @@ class TestHealthCheckerTransportErrors:
         checker = HealthChecker(timeout=5)
         server = _make_http()
 
-        with patch("mcp_manager.health.extract_server_info", side_effect=TypeError("bad")):
-            with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-                mock_client = AsyncMock()
-                mock_client.post.return_value = httpx.Response(200, text="ok")
-                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                mock_client.__aexit__ = AsyncMock(return_value=False)
-                mock_client_cls.return_value = mock_client
+        with (
+            patch("mcp_manager.health.extract_server_info", side_effect=TypeError("bad")),
+            patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls,
+        ):
+            mock_client = AsyncMock()
+            mock_client.post.return_value = httpx.Response(200, text="ok")
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
 
-                result = asyncio.run(checker.check(server))
+            result = asyncio.run(checker.check(server))
 
         assert result.status == ServerStatus.DEGRADED
         assert "invalid json-rpc response" in (result.error_message or "").lower()
@@ -523,10 +525,12 @@ class TestHealthCheckerStdioDeepPaths:
         with patch("mcp_manager.health.asyncio.create_subprocess_exec") as mock_exec:
             # Shallow check gets init + ping; deep check gets empty
             mock_exec.side_effect = [
-                _make_proc([
-                    b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                    b"pong\n",
-                ]),
+                _make_proc(
+                    [
+                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
+                        b"pong\n",
+                    ]
+                ),
                 _make_proc([b""]),
             ]
 
@@ -553,14 +557,18 @@ class TestHealthCheckerStdioDeepPaths:
 
         with patch("mcp_manager.health.asyncio.create_subprocess_exec") as mock_exec:
             mock_exec.side_effect = [
-                _make_proc([
-                    b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                    b"pong\n",
-                ]),
-                _make_proc([
-                    b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                    b"",
-                ]),
+                _make_proc(
+                    [
+                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
+                        b"pong\n",
+                    ]
+                ),
+                _make_proc(
+                    [
+                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
+                        b"",
+                    ]
+                ),
             ]
 
             result = asyncio.run(checker.check(server))
@@ -585,14 +593,18 @@ class TestHealthCheckerStdioDeepPaths:
 
         with patch("mcp_manager.health.asyncio.create_subprocess_exec") as mock_exec:
             mock_exec.side_effect = [
-                _make_proc([
-                    b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                    b"pong\n",
-                ]),
-                _make_proc([
-                    b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                    b'{"jsonrpc":"2.0","id":3,"result":{"tools":[]}}\n',
-                ]),
+                _make_proc(
+                    [
+                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
+                        b"pong\n",
+                    ]
+                ),
+                _make_proc(
+                    [
+                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
+                        b'{"jsonrpc":"2.0","id":3,"result":{"tools":[]}}\n',
+                    ]
+                ),
             ]
 
             result = asyncio.run(checker.check(server))
@@ -617,14 +629,18 @@ class TestHealthCheckerStdioDeepPaths:
 
         with patch("mcp_manager.health.asyncio.create_subprocess_exec") as mock_exec:
             mock_exec.side_effect = [
-                _make_proc([
-                    b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                    b"pong\n",
-                ]),
-                _make_proc([
-                    b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                    b"not json\n",
-                ]),
+                _make_proc(
+                    [
+                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
+                        b"pong\n",
+                    ]
+                ),
+                _make_proc(
+                    [
+                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
+                        b"not json\n",
+                    ]
+                ),
             ]
 
             result = asyncio.run(checker.check(server))
@@ -642,10 +658,12 @@ class TestHealthCheckerStdioDeepPaths:
             p.stdin = MagicMock()
             p.stdin.drain = AsyncMock()
             p.stdout = MagicMock()
-            p.stdout.readline = AsyncMock(side_effect=[
-                b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                b"pong\n",
-            ])
+            p.stdout.readline = AsyncMock(
+                side_effect=[
+                    b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
+                    b"pong\n",
+                ]
+            )
             p.kill.return_value = None
             p.wait = AsyncMock()
             return p
@@ -657,6 +675,7 @@ class TestHealthCheckerStdioDeepPaths:
             p.stdout = MagicMock()
 
             call_count = 0
+
             async def _readline() -> bytes:
                 nonlocal call_count
                 call_count += 1

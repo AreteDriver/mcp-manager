@@ -7,9 +7,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from mcp_manager.adapters import ConfigScope, TargetAdapter, build_target_adapters
+from mcp_manager.adapters.common import classify_json_transport, server_from_json_mapping
+from mcp_manager.adapters.json_target import JsonTargetAdapter
 from mcp_manager.config import IDE_CONFIG_PATHS, PROJECT_CONFIG_NAME, PROJECT_CONFIG_TOOL
 from mcp_manager.exceptions import DiscoveryError
-from mcp_manager.models import McpServer, NetworkConfig, StdioConfig, TransportType
+from mcp_manager.models import McpServer, TransportType
 
 logger = logging.getLogger(__name__)
 
@@ -24,24 +27,45 @@ class ConfigDiscovery:
         """Scan all known IDE config paths and return discovered servers."""
         servers: list[McpServer] = []
 
-        # Global IDE configs.
-        for tool_name, path_str, wrapper_key in IDE_CONFIG_PATHS:
-            found = self._scan_config(tool_name, Path(path_str).expanduser(), wrapper_key)
-            servers.extend(found)
+        for adapter in self._adapters().values():
+            servers.extend(self._scan_adapter(adapter, adapter.user_path))
 
-        # Project-level .mcp.json (cwd and parents).
         if project_dir is not None:
-            found = self._scan_project_configs(project_dir)
-            servers.extend(found)
+            servers.extend(self._scan_project_configs(project_dir))
+            for adapter in self._adapters().values():
+                if adapter.project_path is None:
+                    continue
+                if adapter.project_path == Path(PROJECT_CONFIG_NAME):
+                    # Claude's project file is already handled by the parent-walking
+                    # scanner, which also supports mcp-manager's legacy top-level form.
+                    continue
+                project_path = adapter.resolve_path(scope="project", project_dir=project_dir)
+                servers.extend(self._scan_adapter(adapter, project_path))
 
         return servers
 
-    def discover_tool(self, tool_name: str) -> list[McpServer]:
+    def discover_tool(
+        self,
+        tool_name: str,
+        *,
+        scope: ConfigScope = "user",
+        project_dir: Path | None = None,
+    ) -> list[McpServer]:
         """Scan only a specific tool's config path."""
-        for name, path_str, wrapper_key in IDE_CONFIG_PATHS:
-            if name == tool_name:
-                return self._scan_config(name, Path(path_str).expanduser(), wrapper_key)
-        return []
+        adapter = self._adapters().get(tool_name)
+        if adapter is None:
+            return []
+        try:
+            path = adapter.resolve_path(scope=scope, project_dir=project_dir)
+        except Exception as exc:
+            logger.warning("Cannot resolve %s config: %s", tool_name, exc)
+            return []
+        return self._scan_adapter(adapter, path)
+
+    @staticmethod
+    def _adapters() -> dict[str, TargetAdapter]:
+        """Build adapters lazily so tests and callers can override configured paths."""
+        return build_target_adapters(IDE_CONFIG_PATHS)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -53,26 +77,19 @@ class ConfigDiscovery:
         path: Path,
         wrapper_key: str | None,
     ) -> list[McpServer]:
-        """Parse a single JSON config file into McpServer objects."""
+        """Parse one configured target file into ``McpServer`` objects."""
+        adapter = build_target_adapters([(tool_name, path, wrapper_key)])[tool_name]
+        return self._scan_adapter(adapter, path)
+
+    def _scan_adapter(self, adapter: TargetAdapter, path: Path) -> list[McpServer]:
         if not path.is_file():
             return []
 
         try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as exc:
+            return adapter.parse(path.read_text(encoding="utf-8"), source_path=path)
+        except (DiscoveryError, OSError) as exc:
             logger.warning("Failed to parse %s: %s", path, exc)
             return []
-
-        if not isinstance(raw, dict):
-            return []
-
-        servers_dict: dict[str, Any] = raw
-        if wrapper_key is not None:
-            servers_dict = raw.get(wrapper_key, {})
-            if not isinstance(servers_dict, dict):
-                return []
-
-        return self._parse_servers(servers_dict, tool_name, path)
 
     def _scan_project_configs(self, start: Path) -> list[McpServer]:
         """Walk *start* and its parents looking for .mcp.json files."""
@@ -82,7 +99,18 @@ class ConfigDiscovery:
         for _ in range(20):  # safety limit
             config_path = current / PROJECT_CONFIG_NAME
             if config_path.is_file():
-                found = self._scan_config(PROJECT_CONFIG_TOOL, config_path, None)
+                try:
+                    text = config_path.read_text(encoding="utf-8")
+                    raw = json.loads(text)
+                except (OSError, ValueError):
+                    raw = None
+                wrapper_key = (
+                    "mcpServers"
+                    if isinstance(raw, dict) and isinstance(raw.get("mcpServers"), dict)
+                    else None
+                )
+                tool_name = "claude-code" if wrapper_key else PROJECT_CONFIG_TOOL
+                found = self._scan_config(tool_name, config_path, wrapper_key)
                 servers.extend(found)
             parent = current.parent
             if parent == current:
@@ -98,19 +126,12 @@ class ConfigDiscovery:
         source_path: Path,
     ) -> list[McpServer]:
         """Convert a raw server dict into McpServer objects."""
-        results: list[McpServer] = []
-
-        for name, config in servers_dict.items():
-            if not isinstance(config, dict):
-                logger.warning("Skipping non-dict entry %r in %s", name, source_path)
-                continue
-            try:
-                server = self._build_server(name, config, tool_name, source_path)
-                results.append(server)
-            except DiscoveryError:
-                logger.warning("Failed to parse server %r in %s", name, source_path)
-
-        return results
+        adapter = JsonTargetAdapter(
+            name=tool_name,
+            user_path=source_path,
+            wrapper_key=None,
+        )
+        return adapter.parse(json.dumps(servers_dict), source_path=source_path)
 
     def _build_server(
         self,
@@ -120,35 +141,9 @@ class ConfigDiscovery:
         source_path: Path,
     ) -> McpServer:
         """Build an McpServer from a raw config dict."""
-        transport = self._classify_transport(config)
-
-        stdio_config: StdioConfig | None = None
-        network_config: NetworkConfig | None = None
-
-        if transport == TransportType.STDIO:
-            command = config.get("command", "")
-            if not command:
-                raise DiscoveryError(f"stdio server {name!r} has no command")
-            stdio_config = StdioConfig(
-                command=str(command),
-                args=[str(a) for a in config.get("args", [])],
-                env={str(k): str(v) for k, v in config.get("env", {}).items()},
-            )
-        else:
-            url = config.get("url", "")
-            if not url:
-                raise DiscoveryError(f"{transport} server {name!r} has no url")
-            network_config = NetworkConfig(
-                type=transport.value,  # type: ignore[arg-type]
-                url=str(url),
-                headers={str(k): str(v) for k, v in config.get("headers", {}).items()},
-            )
-
-        return McpServer(
-            name=name,
-            transport=transport,
-            stdio_config=stdio_config,
-            network_config=network_config,
+        return server_from_json_mapping(
+            name,
+            config,
             source_tool=tool_name,
             source_path=source_path,
         )
@@ -156,17 +151,4 @@ class ConfigDiscovery:
     @staticmethod
     def _classify_transport(config: dict[str, Any]) -> TransportType:
         """Determine transport type from a raw config dict."""
-        if "command" in config:
-            return TransportType.STDIO
-
-        explicit_type = config.get("type", "").lower()
-        if explicit_type == "sse":
-            return TransportType.SSE
-        if explicit_type == "http":
-            return TransportType.HTTP
-
-        # Fallback: if there's a URL but no type, assume SSE.
-        if "url" in config:
-            return TransportType.SSE
-
-        return TransportType.STDIO
+        return classify_json_transport(config)

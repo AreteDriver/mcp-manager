@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-08-17
+
 ### Added
 
+- **Target adapter architecture** for client-native MCP configuration dialects
+  - Native Codex TOML discovery, preview, write-back, removal, and project scope
+  - Claude Code and Cursor project-scoped writes using their official paths
+  - Capability inventory via `mcp-manager targets`
+  - Static configuration diagnostics via `mcp-manager doctor`
+  - Translation warnings for policy, auth, environment-reference, timeout, and extension loss
+- **Codex policy coverage** for enabled/required state, tool filters and approvals,
+  authentication references, environment forwarding, and timeouts
 - **MCP Audit** (`mcp-manager audit` subcommand)
   - `audit list` — list probe specs in a rich table
   - `audit runbook` — generate markdown verification runbook for human-in-the-loop testing
@@ -16,6 +26,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Built-in Category 3 baseline probe spec (8 probes for tool/parameter misrepresentation)
   - Custom `--probe-spec` YAML support
   - Ported from standalone `mcp-fuzz` project (ADL-20260721-003)
+
+### Changed
+
+- Windsurf discovery now uses the documented `~/.codeium/windsurf/mcp_config.json` path.
+- Claude Desktop discovery selects the platform-specific user config path.
+- MCP SDK dependency is constrained to `<2.0` until the health/audit code migrates to the 2.x API.
+- JSON and TOML writes preserve unrelated target settings and clean up failed atomic-write temp files.
+- CI pins the Ruff formatter and validates documentation on pull requests.
+
+### Fixed
+
+- Packaging metadata now follows current setuptools license validation.
+- `doctor` reports malformed server entries instead of silently skipping them.
+- `mcp-manager init` no longer ignores the team config and lockfile that its sharing workflow requires.
+- Built-in templates now launch the official Python Git server with `uvx mcp-server-git`
+  instead of referencing the nonexistent `@modelcontextprotocol/server-git` npm package.
+- The reusable validation action installs a pinned `uv` runtime so its generated
+  Python-server configurations validate consistently on clean CI runners.
 
 ## [0.8.0] — 2026-07-20
 
@@ -184,7 +212,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `.env` and credential patterns to `.gitignore`
 - Security workflow: `pip-audit` + `bandit` on push/PR
 
-[Unreleased]: https://github.com/AreteDriver/mcp-manager/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/AreteDriver/mcp-manager/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.7.1...v0.8.0
+[0.7.1]: https://github.com/AreteDriver/mcp-manager/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.2.0...v0.3.0
