@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Packaging metadata now follows current setuptools license validation.
 - `doctor` reports malformed server entries instead of silently skipping them.
 - `mcp-manager init` no longer ignores the team config and lockfile that its sharing workflow requires.
+- Built-in templates now launch the official Python Git server with `uvx mcp-server-git`
+  instead of referencing the nonexistent `@modelcontextprotocol/server-git` npm package.
 
 ## [0.8.0] — 2026-07-20
 

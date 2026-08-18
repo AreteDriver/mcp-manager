@@ -57,8 +57,8 @@ def _suggest_servers(ide: str | None) -> dict[str, dict[str, Any]]:
             "tags": ["core", "filesystem"],
         },
         "git": {
-            "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-git"],
+            "command": "uvx",
+            "args": ["mcp-server-git", "--repository", "."],
             "env": {},
             "tags": ["core", "vcs"],
         },

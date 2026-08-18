@@ -40,8 +40,8 @@ servers:
     args: ["-y", "@modelcontextprotocol/server-filesystem"]
     tags: [core]
   git:
-    command: npx
-    args: ["-y", "@modelcontextprotocol/server-git"]
+    command: uvx
+    args: ["mcp-server-git", "--repository", "."]
     tags: [core]
 ```
 

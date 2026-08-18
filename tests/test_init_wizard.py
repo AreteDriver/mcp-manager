@@ -27,6 +27,8 @@ class TestInitWizard:
         text = config.read_text()
         assert "project: test-proj" in text
         assert "filesystem" in text
+        assert "mcp-server-git" in text
+        assert "@modelcontextprotocol/server-git" not in text
 
     def test_init_overwrite_with_yes(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)

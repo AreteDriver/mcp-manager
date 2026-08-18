@@ -98,6 +98,9 @@ class TestTemplateHelpers:
         assert "project: my-proj" in text
         assert "filesystem" in text
         assert "env: {}" in text
+        assert "command: uvx" in text
+        assert "mcp-server-git" in text
+        assert "@modelcontextprotocol/server-git" not in text
 
     def test_get_template_ai(self) -> None:
         text = get_template("ai", project_name="ai-proj")
