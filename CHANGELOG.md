@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Direct GitHub Action distribution** via `AreteDriver/mcp-manager@v0.9.0`
+  - Installs code from the selected release tag for deterministic validation
+  - Supports config validation, deep health checks, and lockfile verification
+  - Includes end-to-end pass/fail contract tests on GitHub-hosted runners
 - **Target adapter architecture** for client-native MCP configuration dialects
   - Native Codex TOML discovery, preview, write-back, removal, and project scope
   - Claude Code and Cursor project-scoped writes using their official paths

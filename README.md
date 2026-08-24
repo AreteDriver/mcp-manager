@@ -211,7 +211,7 @@ Validate `.mcp-manager.yml` on every PR:
 
 ```yaml
 # .github/workflows/mcp-validate.yml
-- uses: AreteDriver/mcp-manager/.github/actions/mcp-manager-validate@main
+- uses: AreteDriver/mcp-manager@v0.9.0
   with:
     path: "."
     strict: "false"

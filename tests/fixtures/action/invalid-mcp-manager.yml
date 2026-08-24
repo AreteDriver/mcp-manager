@@ -1,0 +1,4 @@
+project: invalid-project
+servers:
+  missing-transport:
+    args: ["--unsafe-default"]
