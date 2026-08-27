@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- MCP 2026-07-28 compatibility probing via `mcp-manager doctor --protocol`,
+  including strict-modern enforcement, deterministic list-cache verification,
+  official SDK integration fixtures, and cross-instance Streamable HTTP tests.
+
+### Changed
+
+- Migrated the MCP SDK integration to the 2.x API and preserved automatic
+  fallback for handshake-era servers.
+- HTTP probes now resolve configured credential environment references without
+  including secret values in diagnostic output.
+
 ## [0.9.0] — 2026-08-17
 
 ### Added

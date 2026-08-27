@@ -185,8 +185,6 @@ class TestBuildFastMcpServer:
     def test_builds_server_with_all_probes(self, sample_spec: Path) -> None:
         spec = load_spec(sample_spec)
         server = build_fastmcp_server(spec)
-        # FastMCP doesn't expose a public tools registry list, but we can
-        # verify it was created with the right name.
         assert server.name == "test-spec"
 
 

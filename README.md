@@ -233,6 +233,10 @@ mcp-manager list --tool cursor
 # Health check all servers
 mcp-manager health
 
+# Probe MCP 2026-07-28 discovery, caching, and legacy fallback
+mcp-manager doctor --protocol my-server
+mcp-manager doctor --protocol my-server --strict-modern --json
+
 # Deep health check — validate dependencies and verify tools/list
 mcp-manager health --deep
 

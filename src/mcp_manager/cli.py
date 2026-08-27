@@ -317,11 +317,27 @@ def doctor(
     project: Path | None = typer.Option(
         None, "--project", "-p", help="Also check project-scoped target configs."
     ),
+    protocol_server: str | None = typer.Option(
+        None,
+        "--protocol",
+        help="Probe one configured server for MCP protocol compatibility.",
+    ),
+    strict_modern: bool = typer.Option(
+        False,
+        "--strict-modern",
+        help="Require MCP 2026-07-28 instead of accepting legacy fallback.",
+    ),
     json: bool = typer.Option(False, "--json", help="Output as JSON."),
 ) -> None:
-    """Diagnose target config syntax, paths, and credential presence."""
+    """Diagnose target configs or probe one server's protocol compatibility."""
     try:
-        doctor_impl(target=target, project=project, json=json)
+        doctor_impl(
+            target=target,
+            project=project,
+            json=json,
+            protocol_server=protocol_server,
+            strict_modern=strict_modern,
+        )
     except McpManagerError:
         raise typer.Exit(1) from None
 
@@ -674,7 +690,9 @@ def audit_serve(
     probe_spec: Path | None = typer.Option(
         None, "--probe-spec", help="Path to custom probe YAML spec."
     ),
-    transport: str = typer.Option("stdio", "--transport", "-t", help="MCP transport: stdio|sse"),
+    transport: str = typer.Option(
+        "stdio", "--transport", "-t", help="MCP transport: stdio|sse|streamable-http"
+    ),
 ) -> None:
     """Start the benign probe MCP server for manual verification."""
     try:

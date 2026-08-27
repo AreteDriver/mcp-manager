@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from typer.testing import CliRunner
 
@@ -11,6 +11,7 @@ from mcp_manager.adapters.codex import CodexTargetAdapter
 from mcp_manager.adapters.json_target import JsonTargetAdapter
 from mcp_manager.cli import app
 from mcp_manager.commands.targets import _check_location
+from mcp_manager.models import McpServer, ProtocolProbeResult, StdioConfig, TransportType
 
 runner = CliRunner()
 
@@ -118,3 +119,88 @@ bearer_token_env_var = "PRIVATE_MCP_TOKEN"
 
     assert result["status"] == "ok"
     assert "super-secret-token-value" not in str(result)
+
+
+def test_doctor_protocol_outputs_machine_readable_result() -> None:
+    server = McpServer(
+        name="modern",
+        transport=TransportType.STDIO,
+        stdio_config=StdioConfig(command="python"),
+        source_tool="codex",
+    )
+    probe_result = ProtocolProbeResult(
+        server_name="modern",
+        transport=TransportType.STDIO,
+        protocol_era="modern",
+        protocol_version="2026-07-28",
+        latency_ms=1.2,
+        tools=["echo"],
+        list_ttl_ms=60_000,
+        list_cache_scope="private",
+        cached_repeat_identical=True,
+    )
+
+    with (
+        patch("mcp_manager.commands.targets._discover", return_value=[server]),
+        patch(
+            "mcp_manager.commands.targets.probe_protocol",
+            new=AsyncMock(return_value=probe_result),
+        ) as probe,
+    ):
+        result = runner.invoke(
+            app,
+            ["doctor", "--protocol", "modern", "--strict-modern", "--json"],
+        )
+
+    assert result.exit_code == 0
+    assert '"protocol_era": "modern"' in result.stdout
+    assert '"cached_repeat_identical": true' in result.stdout
+    assert probe.await_args.kwargs == {"strict_modern": True}
+
+
+def test_doctor_protocol_rejects_ambiguous_server_name() -> None:
+    servers = [
+        McpServer(
+            name="duplicate",
+            transport=TransportType.STDIO,
+            stdio_config=StdioConfig(command="python", args=[source]),
+            source_tool=source,
+        )
+        for source in ("codex", "cursor")
+    ]
+
+    with patch("mcp_manager.commands.targets._discover", return_value=servers):
+        result = runner.invoke(app, ["doctor", "--protocol", "duplicate"])
+
+    assert result.exit_code == 1
+
+
+def test_doctor_protocol_allows_same_server_synced_to_multiple_targets() -> None:
+    servers = [
+        McpServer(
+            name="synced",
+            transport=TransportType.STDIO,
+            stdio_config=StdioConfig(command="python"),
+            source_tool=source,
+        )
+        for source in ("codex", "cursor")
+    ]
+    probe_result = ProtocolProbeResult(
+        server_name="synced",
+        transport=TransportType.STDIO,
+        protocol_era="legacy",
+        protocol_version="2024-11-05",
+        latency_ms=1,
+    )
+
+    with (
+        patch("mcp_manager.commands.targets._discover", return_value=servers),
+        patch(
+            "mcp_manager.commands.targets.probe_protocol",
+            new=AsyncMock(return_value=probe_result),
+        ),
+    ):
+        result = runner.invoke(app, ["doctor", "--protocol", "synced"])
+
+    assert result.exit_code == 0
+    assert "legacy" in result.stdout
