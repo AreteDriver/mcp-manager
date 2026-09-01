@@ -134,4 +134,13 @@ def audit_serve_impl(
         "Attach to Claude Code and exercise probes.[/bold yellow]\n"
     )
     server = build_fastmcp_server(spec)
-    server.run(transport=transport)  # type: ignore[arg-type]
+    if transport == "stdio":
+        server.run(transport="stdio")
+    elif transport == "sse":
+        server.run(transport="sse")
+    elif transport == "streamable-http":
+        server.run(transport="streamable-http", stateless_http=True)
+    else:
+        raise McpManagerError(
+            f"Unsupported audit transport: {transport}. Expected stdio, sse, or streamable-http."
+        )

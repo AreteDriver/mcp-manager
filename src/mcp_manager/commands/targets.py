@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json as json_mod
 import os
 import shutil
@@ -11,10 +12,11 @@ from typing import Any
 from rich.table import Table
 
 from mcp_manager.adapters import ConfigScope, TargetAdapter, build_target_adapters
-from mcp_manager.commands.common import console
+from mcp_manager.commands.common import _discover, console
+from mcp_manager.compatibility import probe_protocol
 from mcp_manager.config import IDE_CONFIG_PATHS
 from mcp_manager.exceptions import DiscoveryError, McpManagerError
-from mcp_manager.models import McpServer
+from mcp_manager.models import McpServer, ProtocolProbeResult
 from mcp_manager.telemetry import track_command
 
 
@@ -50,9 +52,23 @@ def doctor_impl(
     target: str | None,
     project: Path | None,
     json: bool,  # noqa: A002
+    protocol_server: str | None = None,
+    strict_modern: bool = False,
 ) -> None:
     """Validate config syntax, referenced paths, and credential presence."""
     track_command("doctor")
+    if protocol_server is not None:
+        _doctor_protocol(
+            server_name=protocol_server,
+            target=target,
+            project=project,
+            strict_modern=strict_modern,
+            json=json,
+        )
+        return
+    if strict_modern:
+        raise McpManagerError("--strict-modern requires --protocol SERVER")
+
     adapters = build_target_adapters(IDE_CONFIG_PATHS)
     if target is not None:
         adapter = adapters.get(target)
@@ -74,6 +90,76 @@ def doctor_impl(
 
     if any(result["status"] == "error" for result in results):
         raise McpManagerError("One or more target configurations are invalid")
+
+
+def _doctor_protocol(
+    *,
+    server_name: str,
+    target: str | None,
+    project: Path | None,
+    strict_modern: bool,
+    json: bool,  # noqa: A002
+) -> None:
+    """Run a read-only compatibility probe against one discovered server."""
+    matches = [
+        server
+        for server in _discover(tool=target, project_dir=project)
+        if server.name == server_name
+    ]
+    if not matches:
+        raise McpManagerError(f"Server {server_name!r} was not found in discovered configs")
+    distinct_connections = {
+        (
+            server.transport,
+            repr(server.stdio_config.model_dump() if server.stdio_config else None),
+            repr(server.network_config.model_dump() if server.network_config else None),
+        )
+        for server in matches
+    }
+    if len(distinct_connections) > 1:
+        sources = sorted({server.source_tool or "unknown" for server in matches})
+        raise McpManagerError(
+            f"Server {server_name!r} has different configurations in: {', '.join(sources)}. "
+            "Select one with --target."
+        )
+
+    try:
+        result = asyncio.run(probe_protocol(matches[0], strict_modern=strict_modern))
+    except McpManagerError:
+        raise
+    except Exception as exc:
+        raise McpManagerError(
+            f"Protocol probe failed for {server_name!r}: {type(exc).__name__}"
+        ) from exc
+
+    if json:
+        payload = result.model_dump(by_alias=True, mode="json", exclude_none=True)
+        console.print_json(json_mod.dumps({"protocol": payload}, indent=2))
+    else:
+        _render_protocol_doctor(result)
+
+
+def _render_protocol_doctor(result: ProtocolProbeResult) -> None:
+    table = Table(title="MCP Protocol Doctor")
+    table.add_column("Server", style="cyan")
+    table.add_column("Era")
+    table.add_column("Version")
+    table.add_column("Tools", justify="right")
+    table.add_column("Cache hint")
+    table.add_column("Repeat stable")
+    cache_hint = "—"
+    if result.list_ttl_ms is not None:
+        scope = result.list_cache_scope or "unspecified"
+        cache_hint = f"{result.list_ttl_ms} ms ({scope})"
+    table.add_row(
+        result.server_name,
+        result.protocol_era,
+        result.protocol_version,
+        str(len(result.tools)),
+        cache_hint,
+        "yes" if result.cached_repeat_identical else "no",
+    )
+    console.print(table)
 
 
 def _capability_row(adapter: TargetAdapter) -> dict[str, Any]:

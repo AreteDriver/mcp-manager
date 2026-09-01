@@ -1,9 +1,9 @@
 lockfileVersion: '1'
-resolvedAt: '2026-08-18T07:32:30.423514+00:00'
+resolvedAt: '2026-09-01T02:57:08.231969+00:00'
 servers:
   filesystem:
-    resolvedAt: '2026-08-18T07:32:30.423458+00:00'
-    resolvedVersion: 2026.7.10
+    resolvedAt: '2026-09-01T02:57:08.231837+00:00'
+    resolvedVersion: 2026.8.31
   git:
-    resolvedAt: '2026-08-18T07:32:30.423511+00:00'
+    resolvedAt: '2026-09-01T02:57:08.231959+00:00'
     error: 'Non-npm command: version not resolvable'

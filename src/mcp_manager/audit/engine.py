@@ -1,6 +1,6 @@
 """MCP audit engine.
 
-Builds a FastMCP server that registers each probe as a benign tool.
+Builds an MCP server that registers each probe as a benign tool.
 The registered description is what the host should display in the permission
 prompt; the *actual* behavior is just a return of a benign marker string.
 """
@@ -12,7 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from .spec import ProbeCase, Spec
 
@@ -43,9 +43,13 @@ def _benign_handler(probe: ProbeCase) -> Callable[..., Any]:
     return handler
 
 
-def build_fastmcp_server(spec: Spec) -> FastMCP:
-    """Build a FastMCP server with all probes registered."""
-    server = FastMCP(spec.name)
+def build_fastmcp_server(spec: Spec) -> MCPServer[Any]:
+    """Build an MCP SDK v2 server with all probes registered.
+
+    The function name is retained as a public compatibility alias for callers
+    introduced before the SDK renamed ``FastMCP`` to ``MCPServer``.
+    """
+    server = MCPServer(spec.name)
     for probe in spec.probes:
         handler = _benign_handler(probe)
         server.tool(
