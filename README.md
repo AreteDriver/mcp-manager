@@ -14,6 +14,16 @@ Think of it as **docker-compose for MCP** — a single `.mcp-manager.yml` in you
 
 ---
 
+## What this demonstrates
+
+- Translating a fragmented configuration workflow into one documented operating model.
+- Safe automation through validation, dry runs, backups, health checks, and rollback-aware writes.
+- Practical Python CLI design, cross-tool integration, testing, security guidance, and team onboarding.
+
+## Current status and limitations
+
+This is an active independent project distributed on PyPI. It manages configuration and diagnostics; it does not host MCP servers or guarantee the behavior of third-party servers and clients. See [Status](#status), [Roadmap](ROADMAP.md), and [Security](SECURITY.md) for current scope.
+
 ## Why mcp-manager?
 
 The Model Context Protocol (MCP) is the open standard for connecting AI agents to external tools — databases, browsers, filesystems, APIs. But every IDE stores MCP configs differently, and there's no way to share them across a team.
