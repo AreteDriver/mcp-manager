@@ -10,7 +10,7 @@ from typing import Any
 
 import httpx2
 from mcp.client import Client
-from mcp.client.stdio import StdioServerParameters
+from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import Implementation
 
@@ -51,6 +51,7 @@ async def _open_client(
     server: McpServer,
     *,
     timeout: float,
+    mode: str = "auto",
 ) -> AsyncIterator[Client]:
     """Open an official SDK client while preserving configured transport details."""
     client_info = Implementation(name=MCP_CLIENT_NAME, version=MCP_CLIENT_VERSION)
@@ -65,13 +66,17 @@ async def _open_client(
             env=stdio_cfg.env or None,
             cwd=stdio_cfg.cwd,
         )
-        async with Client(
-            params,
-            mode="auto",
-            read_timeout_seconds=timeout,
-            client_info=client_info,
-        ) as client:
-            yield client
+        # Server stderr may contain local paths or credentials. Protocol doctor
+        # returns a sanitized error instead of forwarding subprocess diagnostics.
+        with open(os.devnull, "w", encoding="utf-8") as errlog:
+            transport = stdio_client(params, errlog=errlog)
+            async with Client(
+                transport,
+                mode=mode,
+                read_timeout_seconds=timeout,
+                client_info=client_info,
+            ) as client:
+                yield client
         return
 
     if server.transport == TransportType.HTTP:
@@ -84,7 +89,7 @@ async def _open_client(
             transport = streamable_http_client(network_cfg.url, http_client=http_client)
             async with Client(
                 transport,
-                mode="auto",
+                mode=mode,
                 read_timeout_seconds=timeout,
                 client_info=client_info,
             ) as client:
@@ -116,30 +121,73 @@ async def probe_protocol(
     served from the SDK cache rather than crossing the transport.
     """
     start = time.monotonic()
-    async with _open_client(server, timeout=timeout) as client:
-        if strict_modern and client.protocol_version != MCP_PROTOCOL_VERSION:
-            raise ProtocolError(
-                f"Server negotiated legacy protocol {client.protocol_version}; "
-                f"required {MCP_PROTOCOL_VERSION}"
-            )
-        first = await client.list_tools(cache_mode="refresh")
-        repeated = await client.list_tools(cache_mode="use")
-        call_result = None
-        if call_tool is not None:
-            result = await client.call_tool(call_tool, call_arguments or {})
-            call_result = result.model_dump(by_alias=True, mode="json", exclude_none=True)
 
-        server_info = (
-            client.server_info.model_dump(by_alias=True, mode="json", exclude_none=True)
-            if client.server_info is not None
-            else {}
+    async def collect(mode: str) -> ProtocolProbeResult:
+        async with _open_client(server, timeout=timeout, mode=mode) as client:
+            return await _collect_probe_result(
+                client,
+                server=server,
+                start=start,
+                strict_modern=strict_modern,
+                call_tool=call_tool,
+                call_arguments=call_arguments,
+            )
+
+    connected = False
+    try:
+        async with _open_client(server, timeout=timeout, mode="auto") as client:
+            connected = True
+            return await _collect_probe_result(
+                client,
+                server=server,
+                start=start,
+                strict_modern=strict_modern,
+                call_tool=call_tool,
+                call_arguments=call_arguments,
+            )
+    except Exception:
+        if connected or strict_modern or server.transport != TransportType.STDIO:
+            raise
+
+    # Some handshake-era stdio servers exit instead of returning method-not-found
+    # for server/discover. Restart the process and negotiate explicitly in legacy
+    # mode. Never retry failures that occur after a successful connection.
+    return await collect("legacy")
+
+
+async def _collect_probe_result(
+    client: Client,
+    *,
+    server: McpServer,
+    start: float,
+    strict_modern: bool,
+    call_tool: str | None,
+    call_arguments: dict[str, Any] | None,
+) -> ProtocolProbeResult:
+    """Collect stable probe evidence from an already negotiated client."""
+    if strict_modern and client.protocol_version != MCP_PROTOCOL_VERSION:
+        raise ProtocolError(
+            f"Server negotiated legacy protocol {client.protocol_version}; "
+            f"required {MCP_PROTOCOL_VERSION}"
         )
-        capabilities = client.server_capabilities.model_dump(
-            by_alias=True, mode="json", exclude_none=True
-        )
-        first_dump = first.model_dump(by_alias=True, mode="json", exclude_none=True)
-        repeated_dump = repeated.model_dump(by_alias=True, mode="json", exclude_none=True)
-        version = client.protocol_version
+    first = await client.list_tools(cache_mode="refresh")
+    repeated = await client.list_tools(cache_mode="use")
+    call_result = None
+    if call_tool is not None:
+        result = await client.call_tool(call_tool, call_arguments or {})
+        call_result = result.model_dump(by_alias=True, mode="json", exclude_none=True)
+
+    server_info = (
+        client.server_info.model_dump(by_alias=True, mode="json", exclude_none=True)
+        if client.server_info is not None
+        else {}
+    )
+    capabilities = client.server_capabilities.model_dump(
+        by_alias=True, mode="json", exclude_none=True
+    )
+    first_dump = first.model_dump(by_alias=True, mode="json", exclude_none=True)
+    repeated_dump = repeated.model_dump(by_alias=True, mode="json", exclude_none=True)
+    version = client.protocol_version
 
     return ProtocolProbeResult(
         server_name=server.name,

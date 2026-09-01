@@ -16,6 +16,9 @@ for line in sys.stdin:
     method = message.get("method")
     request_id = message.get("id")
     if method == "server/discover":
+        if "--exit-on-discover" in sys.argv:
+            print("private server diagnostic", file=sys.stderr, flush=True)
+            raise SystemExit(2)
         print(
             json.dumps(
                 {

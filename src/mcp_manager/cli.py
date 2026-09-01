@@ -338,7 +338,8 @@ def doctor(
             protocol_server=protocol_server,
             strict_modern=strict_modern,
         )
-    except McpManagerError:
+    except McpManagerError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from None
 
 

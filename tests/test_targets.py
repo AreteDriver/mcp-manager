@@ -204,3 +204,25 @@ def test_doctor_protocol_allows_same_server_synced_to_multiple_targets() -> None
 
     assert result.exit_code == 0
     assert "legacy" in result.stdout
+
+
+def test_doctor_protocol_prints_sanitized_failure() -> None:
+    server = McpServer(
+        name="broken",
+        transport=TransportType.STDIO,
+        stdio_config=StdioConfig(command="missing"),
+        source_tool="codex",
+    )
+
+    with (
+        patch("mcp_manager.commands.targets._discover", return_value=[server]),
+        patch(
+            "mcp_manager.commands.targets.probe_protocol",
+            new=AsyncMock(side_effect=FileNotFoundError("private/path/secret")),
+        ),
+    ):
+        result = runner.invoke(app, ["doctor", "--protocol", "broken"])
+
+    assert result.exit_code == 1
+    assert "Protocol probe failed for 'broken': FileNotFoundError" in result.stdout
+    assert "private/path/secret" not in result.stdout

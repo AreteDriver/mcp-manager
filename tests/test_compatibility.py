@@ -109,3 +109,37 @@ async def test_auto_probe_falls_back_to_legacy_handshake() -> None:
     assert result.cached_repeat_identical is True
     assert result.tool_call_result is not None
     assert result.tool_call_result["content"] == [{"type": "text", "text": "ok"}]
+
+
+@pytest.mark.asyncio
+async def test_auto_probe_restarts_stdio_server_that_exits_on_discover(capsys) -> None:
+    server = McpServer(
+        name="brittle-legacy-fixture",
+        transport=TransportType.STDIO,
+        stdio_config=StdioConfig(
+            command=sys.executable,
+            args=[str(FIXTURES / "legacy_mcp_server.py"), "--exit-on-discover"],
+        ),
+    )
+
+    result = await probe_protocol(server)
+
+    assert result.protocol_era == "legacy"
+    assert result.protocol_version == "2024-11-05"
+    assert result.tools == ["legacy_echo"]
+    assert "private server diagnostic" not in capsys.readouterr().err
+
+
+@pytest.mark.asyncio
+async def test_strict_modern_does_not_restart_brittle_legacy_server() -> None:
+    server = McpServer(
+        name="brittle-legacy-fixture",
+        transport=TransportType.STDIO,
+        stdio_config=StdioConfig(
+            command=sys.executable,
+            args=[str(FIXTURES / "legacy_mcp_server.py"), "--exit-on-discover"],
+        ),
+    )
+
+    with pytest.raises(ExceptionGroup):
+        await probe_protocol(server, strict_modern=True)

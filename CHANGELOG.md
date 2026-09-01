@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fallback for handshake-era servers.
 - HTTP probes now resolve configured credential environment references without
   including secret values in diagnostic output.
+- Stdio probes restart once in explicit legacy mode when a handshake-era server
+  exits during discovery, and CLI failures now emit sanitized diagnostics.
 
 ## [0.9.0] — 2026-08-17
 

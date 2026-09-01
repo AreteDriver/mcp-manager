@@ -17,7 +17,8 @@ The probe performs this sequence:
 
 1. Attempt `server/discover` using MCP 2026-07-28.
 2. Fall back to the legacy initialization handshake when the server does not
-   implement discovery.
+   implement discovery. If a handshake-era stdio server exits on the unknown
+   discovery request, restart it once in explicit legacy mode.
 3. Request `tools/list` with a cache refresh.
 4. Repeat `tools/list` through the SDK cache and compare the client-visible
    result.
