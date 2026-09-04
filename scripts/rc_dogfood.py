@@ -14,8 +14,6 @@ import venv
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
 from mcp_manager import __version__
 from mcp_manager.adapters import build_target_adapters
 from mcp_manager.atomic import atomic_write_text
