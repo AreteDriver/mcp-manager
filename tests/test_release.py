@@ -177,13 +177,33 @@ class TestWorkflowYaml:
         steps = data["jobs"]["audit"]["steps"]
         commands = "\n".join(str(step.get("run", "")) for step in steps)
         actions = [str(step.get("uses", "")) for step in steps]
+        checkout = next(
+            step for step in steps if str(step.get("uses", "")).startswith("actions/checkout@")
+        )
+        install_gitleaks = next(step for step in steps if step.get("name") == "Install Gitleaks")
 
         assert "pip-audit --strict --desc=on ." in commands
         assert "|| true" not in commands
-        assert any(
-            action == "gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e"
-            for action in actions
+        assert install_gitleaks["env"]["GITLEAKS_VERSION"] == "8.30.0"
+        assert install_gitleaks["env"]["GITLEAKS_SHA256"] == (
+            "79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e"
         )
+        assert "sha256sum --check --strict" in commands
+        assert 'gitleaks" git --redact --no-banner --verbose .' in commands
+        assert not any(action.startswith("gitleaks/") for action in actions)
+        assert checkout["with"]["fetch-depth"] == 0
+
+    def test_docs_workflow_uses_allowlisted_pages_artifact_upload(self) -> None:
+        workflow = Path(__file__).parent.parent / ".github" / "workflows" / "docs.yml"
+        data = yaml.safe_load(workflow.read_text())
+        steps = data["jobs"]["build"]["steps"]
+        upload = next(step for step in steps if step.get("name") == "Upload Pages artifact")
+
+        assert upload["uses"] == (
+            "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+        )
+        assert upload["with"]["name"] == "github-pages"
+        assert upload["with"]["archive"] is False
 
     def test_ci_runs_tests_on_all_supported_operating_systems(self) -> None:
         workflow = Path(__file__).parent.parent / ".github" / "workflows" / "ci.yml"

@@ -31,7 +31,9 @@ def atomic_write_text(path: Path, text: str, *, mode: int | None = None) -> None
             suffix=path.suffix or ".tmp",
         )
         tmp_path = Path(tmp_name)
-        if target_mode is not None:
+        # Windows uses ACLs rather than POSIX permission bits. os.chmod there
+        # only toggles the read-only flag and cannot enforce modes like 0o600.
+        if target_mode is not None and os.name != "nt":
             os.chmod(tmp_path, target_mode)
 
         file_obj = os.fdopen(fd, "w", encoding="utf-8", newline="")

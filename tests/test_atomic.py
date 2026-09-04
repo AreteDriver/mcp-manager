@@ -19,7 +19,8 @@ def test_atomic_write_replaces_content_and_preserves_mode(tmp_path: Path) -> Non
     atomic_write_text(target, "new\n")
 
     assert target.read_text(encoding="utf-8") == "new\n"
-    assert target.stat().st_mode & 0o777 == 0o640
+    if os.name != "nt":
+        assert target.stat().st_mode & 0o777 == 0o640
 
 
 def test_atomic_write_applies_explicit_private_mode(tmp_path: Path) -> None:
@@ -27,7 +28,8 @@ def test_atomic_write_applies_explicit_private_mode(tmp_path: Path) -> None:
 
     atomic_write_text(target, "{}\n", mode=0o600)
 
-    assert target.stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert target.stat().st_mode & 0o777 == 0o600
 
 
 def test_atomic_write_cleans_up_temp_file_after_replace_failure(tmp_path: Path) -> None:

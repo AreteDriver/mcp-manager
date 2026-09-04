@@ -119,6 +119,10 @@ class AuthStore:
     def check_permissions(self) -> tuple[bool, str]:
         if not self._path.exists():
             return (True, "")
+        if os.name == "nt":
+            # Windows access control is ACL-based; st_mode cannot determine
+            # whether another principal can read this file.
+            return (True, "")
         mode = self._path.stat().st_mode
         if mode & 0o077:
             actual = oct(mode & 0o777)

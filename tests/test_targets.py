@@ -34,11 +34,13 @@ def test_targets_renders_capability_table() -> None:
 
 def test_doctor_reports_missing_absolute_command(tmp_path: Path) -> None:
     config = tmp_path / "config.toml"
+    missing_command = (tmp_path / "missing" / "python").as_posix()
+    missing_argument = (tmp_path / "missing" / "server.py").as_posix()
     config.write_text(
-        """\
+        f"""\
 [mcp_servers.broken]
-command = "/definitely/missing/python"
-args = ["/also/missing/server.py"]
+command = "{missing_command}"
+args = ["{missing_argument}"]
 """
     )
     adapter = CodexTargetAdapter(user_path=config)
@@ -47,8 +49,8 @@ args = ["/also/missing/server.py"]
 
     assert result["status"] == "error"
     messages = [issue["message"] for issue in result["issues"]]
-    assert "command does not exist: /definitely/missing/python" in messages
-    assert "argument path does not exist: /also/missing/server.py" in messages
+    assert f"command does not exist: {missing_command}" in messages
+    assert f"argument path does not exist: {missing_argument}" in messages
 
 
 def test_doctor_reports_invalid_server_shape(tmp_path: Path) -> None:
