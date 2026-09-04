@@ -1,0 +1,34 @@
+name: Action Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  action-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Accept a valid shared MCP configuration
+        uses: ./
+        with:
+          path: "."
+          strict: "false"
+          lockfile-check: "true"
+
+      - name: Reject an invalid MCP configuration
+        id: expected-failure
+        continue-on-error: true
+        uses: ./
+        with:
+          path: tests/fixtures/action/invalid-mcp-manager.yml
+
+      - name: Verify the validation gate failed closed
+        if: steps.expected-failure.outcome != 'failure'
+        run: exit 1

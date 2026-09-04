@@ -21,6 +21,7 @@ from mcp_manager.writeback import ConfigWriteback
 logger = logging.getLogger(__name__)
 
 DEFAULT_FILENAME = ".mcp-manager.yml"
+_MAX_REMOTE_CONFIG_BYTES = 1024 * 1024
 
 _TEMPLATE: str = """# mcp-manager project configuration
 # Docs: https://github.com/AreteDriver/mcp-manager
@@ -232,6 +233,8 @@ def _resolve_extends(
     raw: dict[str, Any],
     base_dir: Path,
     visited: set[str],
+    *,
+    allow_local: bool = True,
 ) -> dict[str, Any]:
     """Resolve ``extends`` references and merge configs.
 
@@ -263,7 +266,7 @@ def _resolve_extends(
     merged: dict[str, Any] = {"project": "", "servers": {}}
 
     for source in sources:
-        base = _fetch_base_config(source, base_dir, visited)
+        base = _fetch_base_config(source, base_dir, visited, allow_local=allow_local)
         merged["project"] = base.get("project", merged["project"])
         base_servers = base.get("servers", {})
         if isinstance(base_servers, dict):
@@ -287,6 +290,8 @@ def _fetch_base_config(
     source: str,
     base_dir: Path,
     visited: set[str],
+    *,
+    allow_local: bool = True,
 ) -> dict[str, Any]:
     """Fetch and parse a single base config source.
 
@@ -299,6 +304,8 @@ def _fetch_base_config(
         Parsed base config dict.
     """
     if source.startswith("file://"):
+        if not allow_local:
+            raise WritebackError("Remote configs cannot extend local files")
         path = Path(source[7:])
         if not path.is_absolute():
             path = base_dir / path
@@ -311,6 +318,8 @@ def _fetch_base_config(
         return _fetch_remote_config(source, visited)
 
     # Treat as local relative path
+    if not allow_local:
+        raise WritebackError("Remote configs cannot extend local files")
     local_path = base_dir / source
     if not local_path.is_file():
         raise WritebackError(f"Extends source not found: {source} (looked in {base_dir})")
@@ -353,26 +362,44 @@ def _fetch_remote_config(
     Returns:
         Parsed config dict.
     """
+    canonical = f"remote:{url}"
+    if canonical in visited:
+        raise WritebackError(f"Circular extends reference detected: {url}")
+    visited.add(canonical)
     try:
-        resp = httpx.get(url, timeout=15, follow_redirects=True)
-        resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise WritebackError(f"Failed to fetch extends source {url}: {exc}") from exc
+        try:
+            resp = httpx.get(url, timeout=15, follow_redirects=True)
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise WritebackError(f"Failed to fetch extends source {url}: {exc}") from exc
 
-    try:
-        raw = yaml.safe_load(resp.text)
-    except yaml.YAMLError as exc:
-        raise WritebackError(f"Failed to parse YAML from {url}: {exc}") from exc
+        if len(resp.text.encode("utf-8")) > _MAX_REMOTE_CONFIG_BYTES:
+            raise WritebackError(
+                f"Remote config exceeds the {_MAX_REMOTE_CONFIG_BYTES}-byte limit: {url}"
+            )
 
-    if not isinstance(raw, dict):
-        raise WritebackError(f"Remote config at {url} must contain a YAML mapping")
+        try:
+            raw = yaml.safe_load(resp.text)
+        except yaml.YAMLError as exc:
+            raise WritebackError(f"Failed to parse YAML from {url}: {exc}") from exc
 
-    # Remote configs may themselves have extends; resolve them.
-    # We use a sentinel path so circular detection works.
-    if "extends" in raw:
-        raw = _resolve_extends(raw, Path.cwd(), visited)
+        if not isinstance(raw, dict):
+            raise WritebackError(f"Remote config at {url} must contain a YAML mapping")
 
-    return cast(dict[str, Any], raw)
+        # A remote config may inherit other remote configs, but never local
+        # files. This prevents an untrusted shared config from reading paths on
+        # the operator's machine through nested ``extends`` directives.
+        if "extends" in raw:
+            raw = _resolve_extends(
+                raw,
+                Path.cwd(),
+                visited,
+                allow_local=False,
+            )
+
+        return cast(dict[str, Any], raw)
+    finally:
+        visited.discard(canonical)
 
 
 def _extract_env_var_names(value: str) -> list[str]:

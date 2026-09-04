@@ -8,10 +8,11 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
 
+import httpx
 import yaml
 
+from mcp_manager.atomic import atomic_write_text
 from mcp_manager.exceptions import McpManagerError
 from mcp_manager.models import McpServer, TransportType
 
@@ -100,7 +101,7 @@ def _write_yaml(path: Path, data: dict[str, Any]) -> None:
         sort_keys=False,
         allow_unicode=True,
     )
-    path.write_text(text, encoding="utf-8")
+    atomic_write_text(path, text)
 
 
 def write_lockfile(path: Path, lockfile: Lockfile) -> None:
@@ -166,13 +167,12 @@ def _fetch_npm_latest(package: str) -> str:
     Raises:
         LockfileError: On network or parse failure.
     """
-    import urllib.request
-
     url = f"{NPM_REGISTRY_URL}/{package.replace('/', '%2F')}"
     try:
-        with urllib.request.urlopen(url, timeout=10) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except (URLError, HTTPError, json.JSONDecodeError, TimeoutError) as exc:
+        response = httpx.get(url, timeout=10, follow_redirects=False)
+        response.raise_for_status()
+        data = response.json()
+    except (httpx.HTTPError, json.JSONDecodeError) as exc:
         raise LockfileError(f"Failed to query npm registry for {package}: {exc}") from exc
 
     dist_tags: dict[str, str] = data.get("dist-tags", {})

@@ -9,13 +9,13 @@ from __future__ import annotations
 import json
 import logging
 import shutil
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from mcp_manager.adapters import ConfigScope, build_target_adapters
 from mcp_manager.adapters.base import PreviewValue, TargetAdapter
 from mcp_manager.adapters.json_target import JsonTargetAdapter
+from mcp_manager.atomic import atomic_write_text
 from mcp_manager.config import IDE_CONFIG_PATHS, TARGET_FORMATS, TARGET_PROJECT_PATHS
 from mcp_manager.exceptions import WritebackError
 from mcp_manager.models import McpServer
@@ -239,28 +239,11 @@ class ConfigWriteback:
 
     def _atomic_write(self, path: Path, data: dict[str, Any] | str) -> None:
         """Write target-native config atomically via a temp file."""
-        import os
-
-        tmp_path: str | None = None
         try:
-            fd, tmp_path = tempfile.mkstemp(
-                dir=path.parent,
-                prefix=f".{path.name}-tmp-",
-                suffix=path.suffix or ".tmp",
-            )
-            with open(fd, "w", encoding="utf-8") as fh:
-                if isinstance(data, str):
-                    fh.write(data)
-                    if data and not data.endswith("\n"):
-                        fh.write("\n")
-                else:
-                    json.dump(data, fh, indent=2, ensure_ascii=False)
-                    fh.write("\n")
-            os.replace(tmp_path, path)
+            if isinstance(data, str):
+                text = data if not data or data.endswith("\n") else data + "\n"
+            else:
+                text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+            atomic_write_text(path, text)
         except OSError as exc:
-            if tmp_path is not None:
-                try:
-                    Path(tmp_path).unlink(missing_ok=True)
-                except OSError:
-                    logger.warning("Failed to clean up temporary config file %s", tmp_path)
             raise WritebackError(f"Failed to write {path}: {exc}") from exc

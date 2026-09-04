@@ -45,6 +45,8 @@ nav:
   - Quickstart: quickstart.md
   - Configuration: configuration.md
   - Authentication: authentication.md
+  - Production Readiness: production-readiness.md
+  - Security Model: security-model.md
   - Protocol Compatibility: protocol-compatibility.md
   - Marketplace: marketplace.md
   - Team Features: team.md

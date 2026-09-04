@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import logging
 import shutil
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,6 +15,7 @@ from typing import Any
 import httpx
 import yaml
 
+from mcp_manager.atomic import atomic_write_text
 from mcp_manager.exceptions import WritebackError
 from mcp_manager.health import HealthChecker
 from mcp_manager.models import McpServer, ServerStatus, TransportType
@@ -26,6 +26,7 @@ from mcp_manager.project_config import (
 
 logger = logging.getLogger(__name__)
 _BACKUP_SUFFIX = ".mcp-manager-backup"
+_MAX_REGISTRY_BYTES = 5 * 1024 * 1024
 
 
 @dataclass
@@ -53,10 +54,22 @@ def fetch_remote_servers(url: str, headers: dict[str, str] | None = None) -> lis
         WritebackError: On fetch or parse failure.
     """
     try:
-        resp = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
+        resp = httpx.get(
+            url,
+            headers=headers,
+            timeout=15,
+            follow_redirects=not bool(headers),
+        )
+        if headers and 300 <= resp.status_code < 400:
+            raise WritebackError(
+                "Authenticated registry redirects are refused to prevent credential leakage"
+            )
         resp.raise_for_status()
     except httpx.HTTPError as exc:
         raise WritebackError(f"Failed to fetch registry {url}: {exc}") from exc
+
+    if len(resp.text.encode("utf-8")) > _MAX_REGISTRY_BYTES:
+        raise WritebackError(f"Remote registry exceeds the {_MAX_REGISTRY_BYTES}-byte limit: {url}")
 
     try:
         raw = json.loads(resp.text) if url.endswith(".json") else yaml.safe_load(resp.text)
@@ -214,14 +227,9 @@ def _server_to_config(server: McpServer) -> dict[str, Any]:
 def _atomic_write(path: Path, data: dict[str, Any]) -> None:
     """Write YAML atomically via a temp file."""
     try:
-        fd, tmp_path = tempfile.mkstemp(
-            dir=path.parent,
-            prefix=f".{path.name}-tmp-",
-            suffix=".yml",
-        )
-        with open(fd, "w", encoding="utf-8") as fh:
-            yaml.dump(data, fh, default_flow_style=False, sort_keys=False)
-            fh.write("\n")
-        Path(tmp_path).rename(path)
+        text = yaml.dump(data, default_flow_style=False, sort_keys=False)
+        if not text.endswith("\n"):
+            text += "\n"
+        atomic_write_text(path, text)
     except OSError as exc:
         raise WritebackError(f"Failed to write {path}: {exc}") from exc

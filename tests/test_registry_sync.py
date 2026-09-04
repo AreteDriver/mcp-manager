@@ -120,6 +120,27 @@ class TestFetchRemoteServers:
         _, kwargs = mock_get.call_args
         assert kwargs["headers"]["Authorization"] == "Bearer tok"
         assert kwargs["headers"]["X-Custom"] == "val"
+        assert kwargs["follow_redirects"] is False
+
+    def test_authenticated_fetch_rejects_redirect(self) -> None:
+        with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
+            mock_get.return_value.status_code = 302
+            mock_get.return_value.raise_for_status = lambda: None
+
+            with pytest.raises(WritebackError, match="redirect"):
+                fetch_remote_servers(
+                    "https://example.com/registry.yaml",
+                    headers={"Authorization": "Bearer private"},
+                )
+
+    def test_fetch_rejects_oversized_registry(self) -> None:
+        with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = "#" * 5_300_000
+            mock_get.return_value.raise_for_status = lambda: None
+
+            with pytest.raises(WritebackError, match="exceeds the 5242880-byte limit"):
+                fetch_remote_servers("https://example.com/registry.yaml")
 
     def test_fetch_invalid_yaml(self) -> None:
         with patch("mcp_manager.registry_sync.httpx.get") as mock_get:

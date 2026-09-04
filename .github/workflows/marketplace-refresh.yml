@@ -21,7 +21,6 @@ jobs:
 
       - name: Install dependencies
         run: pip install -e ".[dev]"
-        continue-on-error: true
 
       - name: Install Node.js (for npx-based MCP servers)
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
