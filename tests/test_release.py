@@ -216,6 +216,11 @@ class TestWorkflowYaml:
             "macos-latest",
             "windows-latest",
         ]
+        package_job = data["jobs"]["package"]
+        assert package_job["runs-on"] == "${{ matrix.os }}"
+        assert package_job["strategy"]["matrix"]["os"] == test_job["strategy"]["matrix"]["os"]
+        commands = "\n".join(str(step.get("run", "")) for step in package_job["steps"])
+        assert "scripts/rc_dogfood.py --wheel" in commands
 
     def test_release_critical_workflows_do_not_hide_failures(self) -> None:
         root = Path(__file__).parent.parent / ".github" / "workflows"

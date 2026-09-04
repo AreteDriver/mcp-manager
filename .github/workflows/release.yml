@@ -66,10 +66,7 @@ jobs:
           tar -tzf dist/*.tar.gz | grep -F '/docs/security-model.md'
 
       - name: Smoke-test built wheel
-        run: |
-          python -m venv "$RUNNER_TEMP/mcp-manager-smoke"
-          "$RUNNER_TEMP/mcp-manager-smoke/bin/pip" install dist/*.whl
-          "$RUNNER_TEMP/mcp-manager-smoke/bin/mcp-manager" --version
+        run: python scripts/rc_dogfood.py --wheel "$(find dist -name '*.whl' -print -quit)"
 
       - name: Generate release integrity artifacts
         run: |

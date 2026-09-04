@@ -45,7 +45,11 @@ jobs:
       - run: pytest tests/ -v --cov=mcp_manager --cov-fail-under=87
 
   package:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
@@ -54,7 +58,6 @@ jobs:
       - run: pip install build twine
       - run: python -m build
       - run: twine check dist/*
-      - run: |
-          python -m venv "$RUNNER_TEMP/mcp-manager-smoke"
-          "$RUNNER_TEMP/mcp-manager-smoke/bin/pip" install dist/*.whl
-          "$RUNNER_TEMP/mcp-manager-smoke/bin/mcp-manager" --version
+      - name: Run isolated release-candidate dogfood
+        shell: bash
+        run: python scripts/rc_dogfood.py --wheel "$(find dist -name '*.whl' -print -quit)"
