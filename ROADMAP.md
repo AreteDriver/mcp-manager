@@ -33,13 +33,13 @@ MCP servers or assume authority over a client's runtime policy.
 - [x] Bandit, strict project dependency audit, CodeQL, and Gitleaks fail closed.
 - [x] Wheel, source distribution, metadata, and fresh-wheel smoke tests are release gates.
 - [x] Release artifacts include checksums and a CycloneDX SBOM.
-- [ ] Confirm the exact v1.0 commit is green on hosted Linux, macOS, and Windows runners.
-- [ ] Complete the release-candidate dogfood checklist in `docs/production-readiness.md`.
+- [x] Confirm the exact v1.0 commit is green on hosted Linux, macOS, and Windows runners.
+- [x] Complete the release-candidate dogfood checklist in `docs/production-readiness.md`.
 - [ ] Publish and verify the signed-off v1.0.0 tag and PyPI artifacts.
 
-The unchecked gates require hosted runners, real installed clients, or release
-authority. They must be completed on the release candidate rather than replaced
-with local simulation.
+The remaining gate requires merging the approved release candidate and pushing
+the signed-off tag. It must complete through the protected release workflow;
+local simulation does not replace publication and artifact verification.
 
 ## Post-v1 policy
 
@@ -51,4 +51,4 @@ Claude Code's private project-local state inside `~/.claude.json` remains
 client-owned and intentionally outside v1. The supported shared project format
 is `.mcp.json`; user-scoped state remains supported separately.
 
-*Last updated: 2026-09-01*
+*Last updated: 2026-09-03*

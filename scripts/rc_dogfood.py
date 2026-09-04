@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -76,7 +77,16 @@ def check_config_round_trips(root: Path) -> dict[str, str]:
 
     for target, path, _wrapper in configs:
         _seed_target(path, target)
+        seed_digest = _digest(path)
         writeback.preview(target, servers)
+        writeback.write_servers(target, servers)
+        backup = path.with_suffix(path.suffix + ".mcp-manager-backup")
+        if not backup.is_file():
+            raise RuntimeError(f"{target}: backup was not created")
+        shutil.copyfile(backup, path)
+        if _digest(path) != seed_digest:
+            raise RuntimeError(f"{target}: backup did not restore the original config")
+
         writeback.write_servers(target, servers)
         first_digest = _digest(path)
         writeback.write_servers(target, servers)
@@ -104,9 +114,6 @@ def check_config_round_trips(root: Path) -> dict[str, str]:
             final_data = json.loads(final_text)
             if final_data.get("unrelated") != {"preserved": True}:
                 raise RuntimeError(f"{target}: unrelated JSON keys were not preserved")
-        backup = path.with_suffix(path.suffix + ".mcp-manager-backup")
-        if not backup.is_file():
-            raise RuntimeError(f"{target}: backup was not created")
         results[target] = "passed"
 
     return results

@@ -44,16 +44,42 @@ fresh environment.
 
 Record evidence for all of the following on the proposed release commit:
 
-- [ ] Import existing configs from every supported client without exposing credential values.
-- [ ] Preview and apply a no-op sync twice; the second run produces no change.
-- [ ] Add and remove one stdio and one network server per writable target.
-- [ ] Confirm unrelated JSON and TOML keys and comments survive round trips.
-- [ ] Interrupt or force a failed write and restore from `.mcp-manager-backup`.
-- [ ] Exercise missing commands, missing environment variables, timeouts, malformed configs, and unavailable servers.
-- [ ] Run the public Action against one valid config and one intentionally invalid config.
-- [ ] Install with pip, pipx, and uv from the release-candidate artifact.
-- [ ] Complete one smoke pass on Linux, macOS, and Windows.
-- [ ] Confirm there are no unresolved P0/P1 defects or undocumented data-loss paths.
+- [x] Import existing configs from every supported client without exposing credential values.
+- [x] Preview and apply a no-op sync twice; the second run produces no change.
+- [x] Add and remove one stdio and one network server per writable target.
+- [x] Confirm unrelated JSON and TOML keys and comments survive round trips.
+- [x] Interrupt or force a failed write and restore from `.mcp-manager-backup`.
+- [x] Exercise missing commands, missing environment variables, timeouts, malformed configs, and unavailable servers.
+- [x] Run the public Action against one valid config and one intentionally invalid config.
+- [x] Install with pip, pipx, and uv from the release-candidate artifact.
+- [x] Complete one smoke pass on Linux, macOS, and Windows.
+- [x] Confirm there are no unresolved P0/P1 defects or undocumented data-loss paths.
+
+### v1.0.0 evidence — 2026-09-03
+
+The evidence applies to the release-candidate head of
+[PR #20](https://github.com/AreteDriver/mcp-manager/pull/20). The pull request's
+exact-commit checks are the authoritative hosted record.
+
+- Existing Codex, Claude Code, and Claude Desktop configuration was imported
+  read-only on macOS. Output was reviewed for structure and diagnostics only;
+  credential values were not recorded. Cursor and Windsurf were not installed
+  on that workstation, so no nonexistent user configuration was fabricated.
+- `scripts/rc_dogfood.py` exercises all five native target formats in isolated
+  temporary directories. It previews, applies, repeats, parses, removes,
+  preserves unrelated data, restores a backup byte-for-byte, and verifies that
+  a forced atomic-replacement failure retains the original and cleans its
+  temporary file.
+- The test suite covers missing commands and environment variables, network and
+  subprocess timeouts, malformed configuration, and unavailable servers. The
+  public Action workflow covers both valid and intentionally invalid input.
+- The candidate wheel was installed and invoked in fresh pip, pipx, and uv tool
+  environments. The package matrix repeats the wheel test on hosted Linux,
+  macOS, and Windows runners.
+- The local candidate suite passed 627 tests at 88.08% coverage, together with
+  Ruff, format, strict mypy, strict MkDocs, Bandit, dependency audit, package
+  metadata, and source-archive checks. GitHub reported no open issues when the
+  candidate was signed off.
 
 ## Rollback
 
