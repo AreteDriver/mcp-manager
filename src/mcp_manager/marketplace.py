@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
 
-from mcp_manager.models import StdioConfig
+from mcp_manager.models import McpServer, NetworkConfig, ServerStatus, StdioConfig, TransportType
 from mcp_manager.project_config import DEFAULT_FILENAME
 
 # ---------------------------------------------------------------------------
@@ -261,6 +262,7 @@ def refresh_marketplace(
     *,
     timeout: int = 30,
     dry_run: bool = False,
+    progress: Callable[[str], None] | None = None,
 ) -> bool:
     """Run deep health checks on all marketplace servers and update scores.
 
@@ -270,25 +272,38 @@ def refresh_marketplace(
     from datetime import UTC, datetime
 
     from mcp_manager.health import HealthChecker
-    from mcp_manager.models import McpServer, TransportType
 
     index = load_index(index_path)
     updated = False
 
-    for server in index.servers.values():
-        stdio = server.build_stdio_config()
-        mcp_server = McpServer(
-            name=server.name,
-            transport=TransportType.STDIO,
-            stdio_config=stdio,
-        )
-
+    total = len(index.servers)
+    for position, server in enumerate(index.servers.values(), start=1):
+        if progress is not None:
+            progress(f"[{position}/{total}] checking {server.name}")
         checker = HealthChecker(timeout=timeout)
         try:
-            result = asyncio.run(checker._check_stdio(mcp_server))
-            if result.status.name == "HEALTHY":
+            if server.is_stdio:
+                mcp_server = McpServer(
+                    name=server.name,
+                    transport=TransportType.STDIO,
+                    stdio_config=server.build_stdio_config(),
+                )
+            elif server.is_network:
+                network = NetworkConfig.model_validate(server.build_network_config())
+                mcp_server = McpServer(
+                    name=server.name,
+                    transport=TransportType(network.type),
+                    network_config=network,
+                )
+            else:
+                raise MarketplaceError(
+                    f"Server {server.name!r} has no supported transport configuration"
+                )
+
+            result = asyncio.run(checker.check(mcp_server))
+            if result.status == ServerStatus.HEALTHY:
                 server.quality.health_pass_rate = 1.0
-            elif result.status.name == "DEGRADED":
+            elif result.status == ServerStatus.DEGRADED:
                 server.quality.health_pass_rate = 0.5
             else:
                 server.quality.health_pass_rate = 0.0
@@ -304,6 +319,12 @@ def refresh_marketplace(
 
         server.quality.last_updated = datetime.now(UTC).isoformat()
         updated = True
+        if progress is not None:
+            progress(
+                f"[{position}/{total}] {server.name}: "
+                f"health={server.quality.health_pass_rate:.0%}, "
+                f"tools={server.quality.tool_count}"
+            )
 
     if updated and not dry_run:
         _write_index(index_path, index)

@@ -4,6 +4,16 @@ on:
   schedule:
     - cron: '0 6 * * *'  # 6 AM UTC daily
   workflow_dispatch:
+    inputs:
+      write_changes:
+        description: Commit refreshed scores (manual runs default to dry-run)
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: marketplace-refresh
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -11,6 +21,7 @@ permissions:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
@@ -29,12 +40,17 @@ jobs:
           node-version: '20'
 
       - name: Refresh marketplace scores
+        env:
+          WRITE_CHANGES: ${{ github.event_name == 'schedule' || inputs.write_changes }}
         run: |
-          mcp-manager marketplace-refresh \
-            --output marketplace/index.yaml \
-            --timeout 30
+          args=(marketplace-refresh --output marketplace/index.yaml --timeout 30)
+          if [[ "$WRITE_CHANGES" != "true" ]]; then
+            args+=(--dry-run)
+          fi
+          timeout --signal=TERM --kill-after=30s 10m mcp-manager "${args[@]}"
 
       - name: Commit updated scores
+        if: github.event_name == 'schedule' || inputs.write_changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

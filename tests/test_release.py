@@ -159,3 +159,18 @@ class TestWorkflowYaml:
         steps = data["runs"]["steps"]
         install_uv = next(step for step in steps if step.get("name") == "Install uv runtime")
         assert "uv==${{ inputs.uv-version }}" in install_uv["run"]
+
+    def test_marketplace_refresh_has_bounded_safe_execution(self) -> None:
+        workflow = (
+            Path(__file__).parent.parent / ".github" / "workflows" / "marketplace-refresh.yml"
+        )
+        data = yaml.safe_load(workflow.read_text())
+        job = data["jobs"]["refresh"]
+        assert job["timeout-minutes"] == 15
+        refresh = next(
+            step for step in job["steps"] if step.get("name") == "Refresh marketplace scores"
+        )
+        assert "timeout --signal=TERM --kill-after=30s 10m" in refresh["run"]
+        assert "args+=(--dry-run)" in refresh["run"]
+        commit = next(step for step in job["steps"] if step.get("name") == "Commit updated scores")
+        assert commit["if"] == "github.event_name == 'schedule' || inputs.write_changes"
