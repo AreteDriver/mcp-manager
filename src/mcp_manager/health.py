@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import signal
 import time
 from typing import Any
 
@@ -102,14 +104,21 @@ class HealthChecker:
         """
         assert server.stdio_config is not None
         cfg = server.stdio_config
+        spawn_options: dict[str, Any] = {
+            "stdin": asyncio.subprocess.PIPE,
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.PIPE,
+            "env": {**os.environ, **cfg.env} if cfg.env else None,
+        }
+        if os.name == "posix":
+            # MCP launchers such as npx commonly spawn a shell and a Node child.
+            # A separate session lets cleanup terminate the whole process tree.
+            spawn_options["start_new_session"] = True
         try:
             return await asyncio.create_subprocess_exec(
                 cfg.command,
                 *cfg.args,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=cfg.env if cfg.env else None,
+                **spawn_options,
             )
         except FileNotFoundError:
             return HealthResult(
@@ -154,12 +163,23 @@ class HealthChecker:
 
     @staticmethod
     async def _stdio_cleanup(proc: asyncio.subprocess.Process) -> None:
-        """Kill a stdio subprocess and wait for it to exit."""
+        """Terminate a stdio subprocess tree and bound the reap wait."""
         try:
-            proc.kill()
-            await proc.wait()
+            if os.name == "posix" and isinstance(proc.pid, int):
+                os.killpg(proc.pid, signal.SIGKILL)
+            else:
+                proc.kill()
         except ProcessLookupError:
             pass
+        try:
+            if isinstance(proc, asyncio.subprocess.Process):
+                # communicate() closes stdin and drains stdout/stderr after the
+                # process group is gone, avoiding leaked asyncio pipe transports.
+                await asyncio.wait_for(proc.communicate(), timeout=5)
+            else:
+                await asyncio.wait_for(proc.wait(), timeout=5)
+        except TimeoutError:
+            logger.warning("Timed out waiting for MCP subprocess cleanup")
 
     async def _check_stdio(self, server: McpServer) -> HealthResult:
         """Spawn process, send initialize + ping, measure latency."""

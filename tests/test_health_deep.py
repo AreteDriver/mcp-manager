@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import signal
+import sys
+import time
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
+import pytest
 
 from mcp_manager.health import HealthChecker
 from mcp_manager.models import (
@@ -183,6 +189,43 @@ class TestHealthCheckerStdioEdgeCases:
 
         assert result.status == ServerStatus.UNREACHABLE
         assert "timeout" in (result.error_message or "").lower()
+
+    def test_stdio_cleanup_terminates_process_group_on_posix(self) -> None:
+        """Cleanup kills launcher descendants that keep stdio pipes open."""
+        if os.name != "posix":
+            pytest.skip("POSIX process groups are not available")
+
+        proc = MagicMock()
+        proc.pid = 4242
+        proc.wait = AsyncMock()
+
+        with patch("mcp_manager.health.os.killpg") as killpg:
+            asyncio.run(HealthChecker._stdio_cleanup(proc))
+
+        killpg.assert_called_once_with(4242, signal.SIGKILL)
+        proc.wait.assert_awaited_once()
+
+    def test_stdio_timeout_reaps_descendant_holding_stdout(self, tmp_path: Path) -> None:
+        """A launcher child cannot keep asyncio shutdown blocked after timeout."""
+        if os.name != "posix":
+            pytest.skip("POSIX process groups are not available")
+
+        launcher = tmp_path / "launcher.py"
+        launcher.write_text(
+            "import subprocess, sys\n"
+            "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(3)'])\n"
+        )
+        server = McpServer(
+            name="descendant-holder",
+            transport=TransportType.STDIO,
+            stdio_config=StdioConfig(command=sys.executable, args=[str(launcher)]),
+        )
+        started = time.monotonic()
+
+        result = asyncio.run(HealthChecker(timeout=0.1).check(server))
+
+        assert result.status == ServerStatus.UNREACHABLE
+        assert time.monotonic() - started < 2
 
     def test_stdio_no_response_to_initialize(self) -> None:
         """Stdio process exits without responding to initialize."""
