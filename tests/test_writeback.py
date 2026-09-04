@@ -205,7 +205,7 @@ class TestWriteServersExistingFile:
         fake_path.write_text(json.dumps({"mcpServers": {}}))
         writeback._ide_configs["claude-code"] = (fake_path, "mcpServers")
         with (
-            patch("mcp_manager.writeback.tempfile.mkstemp", side_effect=OSError("disk full")),
+            patch("mcp_manager.atomic.tempfile.mkstemp", side_effect=OSError("disk full")),
             pytest.raises(WritebackError, match="Failed to write"),
         ):
             writeback.write_servers("claude-code", [sample_stdio_server])

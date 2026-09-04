@@ -501,6 +501,54 @@ class TestExtendsInheritance:
         data = parse_project_config(project)
         assert "remote" in data["servers"]
 
+    def test_remote_extends_cycle_is_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class Resp:
+            text = yaml.dump({"extends": "https://example.com/base.yml", "servers": {}})
+
+            def raise_for_status(self) -> None: ...
+
+        monkeypatch.setattr("httpx.get", lambda *_args, **_kwargs: Resp())
+        project = tmp_path / DEFAULT_FILENAME
+        project.write_text(yaml.dump({"extends": "https://example.com/base.yml", "servers": {}}))
+
+        with pytest.raises(WritebackError, match="Circular extends"):
+            parse_project_config(project)
+
+    def test_remote_config_cannot_extend_local_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        private = tmp_path / "private.yml"
+        private.write_text(yaml.dump({"servers": {"private": {"command": "secret"}}}))
+
+        class Resp:
+            text = yaml.dump({"extends": f"file://{private}", "servers": {}})
+
+            def raise_for_status(self) -> None: ...
+
+        monkeypatch.setattr("httpx.get", lambda *_args, **_kwargs: Resp())
+        project = tmp_path / DEFAULT_FILENAME
+        project.write_text(yaml.dump({"extends": "https://example.com/base.yml", "servers": {}}))
+
+        with pytest.raises(WritebackError, match="cannot extend local"):
+            parse_project_config(project)
+
+    def test_oversized_remote_config_is_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class Resp:
+            text = "#" * 1_100_000
+
+            def raise_for_status(self) -> None: ...
+
+        monkeypatch.setattr("httpx.get", lambda *_args, **_kwargs: Resp())
+        project = tmp_path / DEFAULT_FILENAME
+        project.write_text(yaml.dump({"extends": "https://example.com/base.yml", "servers": {}}))
+
+        with pytest.raises(WritebackError, match="exceeds the 1048576-byte limit"):
+            parse_project_config(project)
+
     def test_list_of_extends(self, tmp_path: Path) -> None:
         base1 = tmp_path / "base1.yml"
         base2 = tmp_path / "base2.yml"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -114,15 +115,23 @@ class TestBuild:
     """Ensure the package builds cleanly."""
 
     @pytest.mark.slow
-    def test_build_succeeds(self) -> None:
+    def test_build_succeeds(self, tmp_path: Path) -> None:
         repo = Path(__file__).parent.parent
         result = subprocess.run(
-            [sys.executable, "-m", "build"],
+            [sys.executable, "-m", "build", "--outdir", str(tmp_path)],
             cwd=repo,
             capture_output=True,
             text=True,
         )
         assert result.returncode == 0, result.stderr
+
+        sdist = next(tmp_path.glob("*.tar.gz"))
+        with tarfile.open(sdist, "r:gz") as archive:
+            members = {Path(name) for name in archive.getnames()}
+        packaged_paths = {path.relative_to(path.parts[0]) for path in members if path.parts}
+        assert Path("action.yml") in packaged_paths
+        assert Path("docs/production-readiness.md") in packaged_paths
+        assert Path("docs/security-model.md") in packaged_paths
 
     def test_build_requires_build(self) -> None:
         """Lightweight sanity check: build module is importable."""
@@ -158,4 +167,47 @@ class TestWorkflowYaml:
         assert data["inputs"]["uv-version"]["default"] == "0.11.7"
         steps = data["runs"]["steps"]
         install_uv = next(step for step in steps if step.get("name") == "Install uv runtime")
-        assert "uv==${{ inputs.uv-version }}" in install_uv["run"]
+        assert install_uv["env"]["MCP_MANAGER_UV_VERSION"] == "${{ inputs.uv-version }}"
+        assert "uv==$MCP_MANAGER_UV_VERSION" in install_uv["run"]
+
+    def test_security_workflow_fails_closed(self) -> None:
+        workflow = Path(__file__).parent.parent / ".github" / "workflows" / "security.yml"
+        text = workflow.read_text()
+        data = yaml.safe_load(text)
+        steps = data["jobs"]["audit"]["steps"]
+        commands = "\n".join(str(step.get("run", "")) for step in steps)
+        actions = [str(step.get("uses", "")) for step in steps]
+
+        assert "pip-audit --strict --desc=on ." in commands
+        assert "|| true" not in commands
+        assert any(
+            action == "gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e"
+            for action in actions
+        )
+
+    def test_ci_runs_tests_on_all_supported_operating_systems(self) -> None:
+        workflow = Path(__file__).parent.parent / ".github" / "workflows" / "ci.yml"
+        data = yaml.safe_load(workflow.read_text())
+        test_job = data["jobs"]["test"]
+
+        assert test_job["runs-on"] == "${{ matrix.os }}"
+        assert test_job["strategy"]["matrix"]["os"] == [
+            "ubuntu-latest",
+            "macos-latest",
+            "windows-latest",
+        ]
+
+    def test_release_critical_workflows_do_not_hide_failures(self) -> None:
+        root = Path(__file__).parent.parent / ".github" / "workflows"
+        for name in ("docs.yml", "marketplace-refresh.yml", "security.yml"):
+            assert "continue-on-error: true" not in (root / name).read_text()
+
+    def test_root_action_uses_environment_for_shell_inputs(self) -> None:
+        action = Path(__file__).parent.parent / "action.yml"
+        data = yaml.safe_load(action.read_text())
+
+        assert data["runs"]["using"] == "composite"
+        for step in data["runs"]["steps"]:
+            if "run" in step:
+                assert "${{ inputs.path }}" not in step["run"]
+                assert "${{ inputs.strict }}" not in step["run"]

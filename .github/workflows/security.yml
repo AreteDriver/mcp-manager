@@ -26,25 +26,13 @@ jobs:
           pip install pip-audit bandit[toml]
 
       - name: Run pip-audit (CVE scan)
-        run: |
-          if [ -f uv.lock ]; then
-            pip install uv
-            uv export --format requirements-txt --no-hashes | pip-audit --desc -r /dev/stdin
-          elif [ -f pyproject.toml ]; then
-            pip-audit --desc
-          elif [ -f requirements.txt ]; then
-            pip-audit --desc -r requirements.txt
-          else
-            echo "No lock file found — running directory scan"
-            pip-audit --desc
-          fi
+        run: pip-audit --strict --desc=on .
 
       - name: Run Bandit (security lint)
         run: |
-          bandit -r . -f json -o bandit-report.json \
+          bandit -r src -f json -o bandit-report.json \
             -ll \
-            --exclude './.git,./venv,./.venv,./node_modules,./tests' \
-            || true
+            --exclude './tests'
 
       - name: Upload Bandit report
         if: always()
@@ -53,3 +41,9 @@ jobs:
           name: bandit-report
           path: bandit-report.json
           if-no-files-found: ignore
+
+      - name: Scan repository history for secrets
+        if: always()
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e  # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

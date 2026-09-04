@@ -22,7 +22,7 @@ Think of it as **docker-compose for MCP** — a single `.mcp-manager.yml` in you
 
 ## Current status and limitations
 
-This is an active independent project distributed on PyPI. It manages configuration and diagnostics; it does not host MCP servers or guarantee the behavior of third-party servers and clients. See [Status](#status), [Roadmap](ROADMAP.md), and [Security](SECURITY.md) for current scope.
+This is a production-stable independent project distributed on PyPI. It manages configuration and diagnostics; it does not host MCP servers or guarantee the behavior of third-party servers and clients. See [Status](#status), [Production Readiness](docs/production-readiness.md), and [Security](SECURITY.md) for the supported contract.
 
 ## Why mcp-manager?
 
@@ -221,7 +221,7 @@ Validate `.mcp-manager.yml` on every PR:
 
 ```yaml
 # .github/workflows/mcp-validate.yml
-- uses: AreteDriver/mcp-manager/.github/actions/mcp-manager-validate@main
+- uses: AreteDriver/mcp-manager@v1
   with:
     path: "."
     strict: "false"
@@ -398,11 +398,12 @@ ruff format --check
 # 2. Type checking
 mypy src/mcp_manager
 
-# 3. Tests with coverage (must be ≥80%)
-pytest --cov=mcp_manager --cov-fail-under=80
+# 3. Tests with coverage (must be ≥87%)
+pytest --cov=mcp_manager --cov-fail-under=87
 
 # 4. Security audit
-pip-audit
+pip-audit --strict --desc=on .
+bandit -r src -ll
 ```
 
 CI enforces all of the above. PRs that fail any gate will not merge.
