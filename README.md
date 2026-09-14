@@ -84,6 +84,59 @@ mcp-manager sync --ide cursor
 
 ---
 
+## Architecture
+
+`mcp-manager` connects client-specific configuration formats through one typed
+[`McpServer` model](src/mcp_manager/models.py). The [CLI](src/mcp_manager/cli.py)
+dispatches to [command handlers](src/mcp_manager/commands/), which coordinate the
+configuration and diagnostic paths below.
+
+```mermaid
+flowchart TB
+    clients["Existing client configs<br/>JSON / TOML"]
+    project["Project config<br/>.mcp-manager.yml"]
+
+    subgraph manager["mcp-manager"]
+        discovery["Read-only discovery"]
+        parse["Target adapters<br/>Parse client formats"]
+        loader["Project config loader"]
+        model["McpServer<br/>Shared typed model"]
+        checks["Diagnostics<br/>Health + protocol probes"]
+        writeback["Config writeback"]
+        render["Target adapters<br/>Validate + render"]
+
+        discovery --> parse --> model
+        loader --> model
+        model --> checks
+        model --> writeback --> render
+    end
+
+    clients --> discovery
+    project --> loader
+    checks --> servers["MCP servers<br/>stdio / HTTP / SSE"]
+    render --> output["Updated client configs<br/>Backup + atomic replacement"]
+```
+
+Arrows show the main configuration and diagnostic flows. Parsing and rendering
+use the same adapter layer; diagnostics connect to or launch the configured servers.
+
+- **Read:** [`discovery.py`](src/mcp_manager/discovery.py) reads client configs;
+  [`project_config.py`](src/mcp_manager/project_config.py) loads project YAML.
+  `sync` uses discovered client configs, while `project export` uses `.mcp-manager.yml`.
+- **Check:** [`health.py`](src/mcp_manager/health.py) runs transport-specific checks;
+  [`compatibility.py`](src/mcp_manager/compatibility.py) probes protocol compatibility
+  through the MCP SDK.
+- **Write:** [`adapters/`](src/mcp_manager/adapters/) owns client dialects and
+  translation capabilities; [`writeback.py`](src/mcp_manager/writeback.py) provides
+  previews, backups, and atomic writes for Codex, Claude Code, Claude Desktop,
+  Cursor, and Windsurf.
+
+Supporting modules handle [registries](src/mcp_manager/registry_sync.py),
+[marketplace installs](src/mcp_manager/marketplace.py),
+[authentication](docs/authentication.md), [version locks](src/mcp_manager/lockfile.py),
+and [process monitoring](src/mcp_manager/monitor.py).
+
+---
 ## What Makes This Different
 
 ### vs. Manual IDE Config
