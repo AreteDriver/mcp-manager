@@ -97,24 +97,22 @@ flowchart TB
     project["Project config<br/>.mcp-manager.yml"]
 
     subgraph manager["mcp-manager"]
-        discovery["Read-only discovery"]
-        parse["Target adapters<br/>Parse client formats"]
+        discovery["Read-only discovery<br/>Client adapters"]
         loader["Project config loader"]
         model["McpServer<br/>Shared typed model"]
         checks["Diagnostics<br/>Health + protocol probes"]
-        writeback["Config writeback"]
-        render["Target adapters<br/>Validate + render"]
+        writeback["Writeback + adapters<br/>Validate + render"]
 
-        discovery --> parse --> model
+        discovery --> model
         loader --> model
         model --> checks
-        model --> writeback --> render
+        model --> writeback
     end
 
     clients --> discovery
     project --> loader
     checks --> servers["MCP servers<br/>stdio / HTTP / SSE"]
-    render --> output["Updated client configs<br/>Backup + atomic replacement"]
+    writeback --> output["Updated client configs<br/>Backup + atomic replacement"]
 ```
 
 Arrows show the main configuration and diagnostic flows. Parsing and rendering
