@@ -158,7 +158,7 @@ class TestHealthCheckerStdioEdgeCases:
             result = asyncio.run(checker.check(server))
 
         assert result.status == ServerStatus.UNREACHABLE
-        assert "Permission denied" in (result.error_message or "")
+        assert "OSError" in (result.error_message or "")
 
     def test_stdio_timeout(self) -> None:
         """Stdio handshake times out."""
@@ -455,8 +455,8 @@ class TestHealthCheckerTransportErrors:
 
             result = asyncio.run(checker.check(server))
 
-        # Deep check falls back to prev result (HEALTHY from shallow check)
-        assert result.status == ServerStatus.HEALTHY
+        # Failed deep checks must not preserve the shallow healthy result.
+        assert result.status == ServerStatus.DEGRADED
 
     def test_deep_network_invalid_jsonrpc(self) -> None:
         """Deep check when tools/list returns invalid JSON-RPC."""

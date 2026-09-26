@@ -26,6 +26,30 @@ from mcp_manager.protocol import (
 logger = logging.getLogger(__name__)
 
 
+def _rpc_result(body: Any, request_id: int) -> dict[str, Any]:
+    """Validate a response without exposing untrusted error or payload content."""
+    if (
+        not isinstance(body, dict)
+        or body.get("jsonrpc") != "2.0"
+        or type(body.get("id")) is not int
+        or body["id"] != request_id
+        or "error" in body
+        or not isinstance(body.get("result"), dict)
+    ):
+        raise ProtocolError("Invalid JSON-RPC response")
+    result: dict[str, Any] = body["result"]
+    return result
+
+
+def _listed_tools(body: Any) -> list[Any]:
+    tools = _rpc_result(body, 3).get("tools")
+    if not isinstance(tools, list) or any(
+        not isinstance(tool, dict) or not isinstance(tool.get("name"), str) for tool in tools
+    ):
+        raise ProtocolError("Invalid tools/list response")
+    return tools
+
+
 class HealthChecker:
     """Check health of MCP servers across transport types."""
 
@@ -75,7 +99,7 @@ class HealthChecker:
                 server_name=server.name,
                 status=ServerStatus.ERROR,
                 transport=server.transport,
-                error_message=str(exc),
+                error_message=f"Health check failed ({type(exc).__name__})",
             )
 
     async def check_all(self, servers: list[McpServer]) -> list[HealthResult]:
@@ -123,7 +147,7 @@ class HealthChecker:
                 server_name=server.name,
                 status=ServerStatus.UNREACHABLE,
                 transport=TransportType.STDIO,
-                error_message=str(exc),
+                error_message=f"Health check failed ({type(exc).__name__})",
             )
 
     @staticmethod
@@ -249,7 +273,7 @@ class HealthChecker:
                 server_name=server.name,
                 status=ServerStatus.UNREACHABLE,
                 transport=TransportType.SSE,
-                error_message=f"Connection refused: {url}",
+                error_message="Connection refused",
             )
         except httpx.TimeoutException:
             return HealthResult(
@@ -314,7 +338,7 @@ class HealthChecker:
                 server_name=server.name,
                 status=ServerStatus.UNREACHABLE,
                 transport=TransportType.HTTP,
-                error_message=f"Connection refused: {url}",
+                error_message="Connection refused",
             )
         except httpx.TimeoutException:
             return HealthResult(
@@ -338,6 +362,13 @@ class HealthChecker:
         # Try to parse JSON-RPC response.
         try:
             body = resp.json()
+            result = _rpc_result(body, 1)
+            if (
+                not isinstance(result.get("protocolVersion"), str)
+                or not isinstance(result.get("capabilities"), dict)
+                or not isinstance(result.get("serverInfo"), dict)
+            ):
+                raise ProtocolError("Invalid initialize result")
             server_info = extract_server_info(body)
             return HealthResult(
                 server_name=server.name,
@@ -347,7 +378,7 @@ class HealthChecker:
                 protocol_version=server_info.get("protocol_version"),
                 server_info=server_info,
             )
-        except (json.JSONDecodeError, KeyError, TypeError):
+        except (json.JSONDecodeError, ProtocolError, KeyError, TypeError):
             return HealthResult(
                 server_name=server.name,
                 status=ServerStatus.DEGRADED,
@@ -367,7 +398,7 @@ class HealthChecker:
 
         spawn_result = await self._stdio_spawn(server)
         if isinstance(spawn_result, HealthResult):
-            return prev
+            return spawn_result
         proc = spawn_result
 
         async def _deep_tools_check() -> HealthResult:
@@ -399,7 +430,7 @@ class HealthChecker:
 
             try:
                 parsed = parse_jsonrpc_response(tools_data)
-                tools = parsed.get("result", {}).get("tools", [])
+                tools = _listed_tools(parsed)
                 if not tools:
                     return HealthResult(
                         server_name=server.name,
@@ -445,7 +476,12 @@ class HealthChecker:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.post(url, content=request, headers=headers)
         except httpx.HTTPError:
-            return prev
+            return prev.model_copy(
+                update={
+                    "status": ServerStatus.DEGRADED,
+                    "error_message": "tools/list request failed",
+                }
+            )
 
         if resp.status_code >= 400:
             return HealthResult(
@@ -458,7 +494,7 @@ class HealthChecker:
 
         try:
             body = resp.json()
-            tools = body.get("result", {}).get("tools", [])
+            tools = _listed_tools(body)
             if not tools:
                 return HealthResult(
                     server_name=server.name,
@@ -467,7 +503,7 @@ class HealthChecker:
                     latency_ms=prev.latency_ms,
                     error_message="Server returned zero tools",
                 )
-        except (json.JSONDecodeError, KeyError, TypeError):
+        except (json.JSONDecodeError, ProtocolError, KeyError, TypeError):
             return HealthResult(
                 server_name=server.name,
                 status=ServerStatus.DEGRADED,

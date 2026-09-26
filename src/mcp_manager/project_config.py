@@ -92,8 +92,8 @@ def parse_project_config(
 
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
-        raise WritebackError(f"Failed to parse {path}: {exc}") from exc
+    except yaml.YAMLError:
+        raise WritebackError(f"Failed to parse YAML in {path}") from None
 
     if not isinstance(raw, dict):
         raise WritebackError(f"{path} must contain a YAML mapping")
@@ -171,11 +171,15 @@ def validate_project_config(path: Path) -> list[str]:
     return errors
 
 
-def load_servers_from_config(path: Path) -> list[McpServer]:
+def load_servers_from_config(
+    path: Path, *, resolve_env: bool = True, strict: bool = False
+) -> list[McpServer]:
     """Parse .mcp-manager.yml and return McpServer objects.
 
     Args:
         path: Path to the YAML file.
+        resolve_env: Resolve references for runtime use; disable before persistence.
+        strict: Reject the whole configuration if any entry is invalid.
 
     Returns:
         List of McpServer instances.
@@ -184,14 +188,22 @@ def load_servers_from_config(path: Path) -> list[McpServer]:
     servers_raw = data.get("servers", {})
     results: list[McpServer] = []
 
-    for name, config in servers_raw.items():
-        if not isinstance(config, dict):
-            logger.warning("Skipping non-dict server %r", name)
-            continue
+    for index, (name, config) in enumerate(servers_raw.items(), start=1):
+        error = f"Invalid project server entry {index}"
         try:
-            results.append(_config_to_server(name, config))
-        except (WritebackError, KeyError, TypeError, ValueError) as exc:
-            logger.warning("Failed to parse server %r: %s", name, exc)
+            if not isinstance(name, str) or not name or not isinstance(config, dict):
+                raise WritebackError(error)
+            for field in ("env", "headers"):
+                if field in config and not isinstance(config[field], dict):
+                    raise WritebackError(error)
+            for field in ("args", "tags"):
+                if field in config and not isinstance(config[field], list):
+                    raise WritebackError(error)
+            results.append(_config_to_server(name, config, resolve_env=resolve_env))
+        except (WritebackError, KeyError, TypeError, ValueError):
+            if strict:
+                raise WritebackError(error) from None
+            logger.warning("Skipping invalid project server entry %d", index)
 
     return results
 
@@ -364,27 +376,25 @@ def _fetch_remote_config(
     """
     canonical = f"remote:{url}"
     if canonical in visited:
-        raise WritebackError(f"Circular extends reference detected: {url}")
+        raise WritebackError("Circular extends reference detected in remote config")
     visited.add(canonical)
     try:
         try:
             resp = httpx.get(url, timeout=15, follow_redirects=True)
             resp.raise_for_status()
         except httpx.HTTPError as exc:
-            raise WritebackError(f"Failed to fetch extends source {url}: {exc}") from exc
+            raise WritebackError(f"Failed to fetch extends source ({type(exc).__name__})") from None
 
         if len(resp.text.encode("utf-8")) > _MAX_REMOTE_CONFIG_BYTES:
-            raise WritebackError(
-                f"Remote config exceeds the {_MAX_REMOTE_CONFIG_BYTES}-byte limit: {url}"
-            )
+            raise WritebackError(f"Remote config exceeds the {_MAX_REMOTE_CONFIG_BYTES}-byte limit")
 
         try:
             raw = yaml.safe_load(resp.text)
-        except yaml.YAMLError as exc:
-            raise WritebackError(f"Failed to parse YAML from {url}: {exc}") from exc
+        except yaml.YAMLError:
+            raise WritebackError("Failed to parse YAML from remote extends source") from None
 
         if not isinstance(raw, dict):
-            raise WritebackError(f"Remote config at {url} must contain a YAML mapping")
+            raise WritebackError("Remote config must contain a YAML mapping")
 
         # A remote config may inherit other remote configs, but never local
         # files. This prevents an untrusted shared config from reading paths on
@@ -438,14 +448,14 @@ def _resolve_env_var(value: str) -> str:
     return os.environ.get(var_name, value)
 
 
-def _config_to_server(name: str, config: dict[str, Any]) -> McpServer:
+def _config_to_server(name: str, config: dict[str, Any], *, resolve_env: bool = True) -> McpServer:
     """Convert a .mcp-manager.yml server dict to McpServer."""
     if "command" in config:
         env = config.get("env", {})
         # Resolve shell env vars
         resolved_env = {}
         for key, value in env.items():
-            if isinstance(value, str) and value.startswith("$"):
+            if resolve_env and isinstance(value, str) and value.startswith("$"):
                 resolved_env[key] = _resolve_env_var(value)
             else:
                 resolved_env[key] = str(value)

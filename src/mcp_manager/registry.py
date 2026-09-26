@@ -37,11 +37,11 @@ class ServerRegistry:
         if not isinstance(raw, dict):
             raise RegistryError("Registry file is not a JSON object")
 
-        for name, entry_data in raw.items():
+        for index, (name, entry_data) in enumerate(raw.items(), start=1):
             try:
                 self._entries[name] = RegistryEntry.model_validate(entry_data)
-            except (ValidationError, TypeError, KeyError) as exc:
-                logger.warning("Skipping invalid registry entry %r: %s", name, exc)
+            except (ValidationError, TypeError, KeyError):
+                logger.warning("Skipping invalid registry entry %d", index)
 
     def save(self) -> None:
         """Persist registry to disk."""
