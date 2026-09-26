@@ -21,10 +21,25 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,docs]" build twine pip-audit bandit[toml]
 
-      - name: Run tests
-        run: pytest -q --no-header --tb=short
+      - name: Verify release commit is on main
+        run: |
+          git fetch origin main --depth=1
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Run quality gates
+        run: |
+          ruff check src tests
+          ruff format --check src tests
+          mypy src/mcp_manager
+          pytest -q --no-header --tb=short --cov=mcp_manager --cov-fail-under=87
+          mkdocs build --strict
+
+      - name: Run security gates
+        run: |
+          pip-audit --strict --desc=on .
+          bandit -r src -ll
 
       - name: Version guard
         id: version_guard
@@ -41,8 +56,22 @@ jobs:
 
       - name: Build package
         run: |
-          pip install build
           python -m build
+          twine check dist/*
+
+      - name: Verify source archive contract
+        run: |
+          tar -tzf dist/*.tar.gz | grep -F '/action.yml'
+          tar -tzf dist/*.tar.gz | grep -F '/docs/production-readiness.md'
+          tar -tzf dist/*.tar.gz | grep -F '/docs/security-model.md'
+
+      - name: Smoke-test built wheel
+        run: python scripts/rc_dogfood.py --wheel "$(find dist -name '*.whl' -print -quit)"
+
+      - name: Generate release integrity artifacts
+        run: |
+          pip-audit --strict --format cyclonedx-json --output dist/arete-mcp-sbom.json .
+          sha256sum dist/*.whl dist/*.tar.gz dist/arete-mcp-sbom.json > dist/SHA256SUMS
 
       - name: Extract CHANGELOG section
         id: changelog

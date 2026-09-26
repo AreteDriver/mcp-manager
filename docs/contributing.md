@@ -24,12 +24,12 @@ ruff format --check src/ tests/
 # 2. Type check (strict)
 mypy src/mcp_manager
 
-# 3. Test suite (≥ 80 % coverage gate)
-pytest tests/ -v --cov=mcp_manager --cov-fail-under=80
+# 3. Test suite (≥ 87% coverage gate)
+pytest tests/ -v --cov=mcp_manager --cov-fail-under=87
 
-# 4. Security scan (optional but recommended)
+# 4. Required security scan
 bandit -r src/ -ll
-pip-audit --desc
+pip-audit --strict --desc=on .
 ```
 
 ## What to Contribute

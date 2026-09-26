@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=83.0.0", "setuptools-scm>=8.0"]
+requires = ["setuptools>=83.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "arete-mcp"
-version = "0.9.0"
+version = "1.0.0"
 description = "Discover, diagnose, health-check, and sync MCP servers across Codex, Claude Code, Cursor, Windsurf, and more."
 readme = "README.md"
 license = "MIT"
@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 authors = [{name = "AreteDriver"}]
 keywords = ["mcp", "model-context-protocol", "codex", "claude-code", "cursor", "windsurf", "ai"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
@@ -44,7 +44,10 @@ dev = [
     "types-PyYAML>=6.0",
     "ruff==0.16.3",
     "build>=1.0",
+    "bandit[toml]>=1.9",
+    "pip-audit>=2.10",
     "respx>=0.22",
+    "twine>=6.0",
 ]
 docs = [
     "mkdocs>=1.6.0",

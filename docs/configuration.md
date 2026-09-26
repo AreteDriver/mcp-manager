@@ -122,6 +122,10 @@ Supported `extends` formats:
 | HTTPS | `extends: https://example.com/base.yml` |
 | List | `extends: [base1.yml, base2.yml]` |
 
+For security, a remotely fetched config may inherit only other HTTP(S) or
+`github:` configs. Remote configs cannot use relative paths or `file://` to read
+files from the operator's machine. Remote config bodies are limited to 1 MiB.
+
 ---
 
 ## Validation

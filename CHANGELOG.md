@@ -7,11 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-09-01
+
 ### Added
 
 - MCP 2026-07-28 compatibility probing via `mcp-manager doctor --protocol`,
   including strict-modern enforcement, deterministic list-cache verification,
   official SDK integration fixtures, and cross-instance Streamable HTTP tests.
+- A public root GitHub Action contract at `AreteDriver/mcp-manager@v1`.
+- Linux, macOS, and Windows CI across Python 3.11–3.13.
+- A production-readiness contract, release-candidate dogfood checklist, and
+  explicit threat model.
+- Release SBOM and SHA-256 checksum generation.
 
 ### Changed
 
@@ -21,6 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   including secret values in diagnostic output.
 - Stdio probes restart once in explicit legacy mode when a handshake-era server
   exits during discovery, and CLI failures now emit sanitized diagnostics.
+- Config, auth, lockfile, and registry writes now share a flushed, synced,
+  same-directory atomic replacement implementation.
+- Security, documentation, marketplace, packaging, and release workflows now
+  fail closed.
+
+### Security
+
+- Remote inherited configs reject cycles, oversized bodies, and attempts to
+  extend local files.
+- Authenticated registry requests refuse redirects to avoid forwarding credentials.
+- The npm lock resolver uses a fixed HTTPS endpoint with redirects disabled.
+- Strict project dependency auditing, Bandit, CodeQL, and Gitleaks are required
+  release gates.
 
 ## [0.9.0] — 2026-08-17
 
@@ -227,7 +247,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `.env` and credential patterns to `.gitignore`
 - Security workflow: `pip-audit` + `bandit` on push/PR
 
-[Unreleased]: https://github.com/AreteDriver/mcp-manager/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/AreteDriver/mcp-manager/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/AreteDriver/mcp-manager/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/AreteDriver/mcp-manager/compare/v0.7.0...v0.7.1
