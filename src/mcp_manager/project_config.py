@@ -10,6 +10,7 @@ import os
 import shutil
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlsplit
 
 import httpx
 import yaml
@@ -148,9 +149,11 @@ def validate_project_config(path: Path) -> list[str]:
             errors.append(f"Server {name!r} is not a mapping")
             continue
 
-        # Check required fields
-        if "command" not in config and "url" not in config:
-            errors.append(f"Server {name!r}: missing 'command' or 'url'")
+        try:
+            _validate_server_definition(name, config)
+        except WritebackError as exc:
+            errors.append(str(exc))
+            continue
 
         # Validate env vars
         env = config.get("env", {})
@@ -448,8 +451,52 @@ def _resolve_env_var(value: str) -> str:
     return os.environ.get(var_name, value)
 
 
+def _validate_server_definition(name: str, config: dict[str, Any]) -> None:
+    """Validate transport fields without coercing malformed data or echoing values."""
+    if not isinstance(name, str) or not name.strip():
+        raise WritebackError("Server name must be a non-empty string")
+    if not isinstance(config, dict):
+        raise WritebackError("Server definition must be a mapping")
+    if "command" not in config and "url" not in config:
+        raise WritebackError("Server missing 'command' or 'url'")
+    transport = config.get("type", "stdio" if "command" in config else "sse")
+    if not isinstance(transport, str) or transport not in {"stdio", "sse", "http"}:
+        raise WritebackError("Server type must be stdio, sse or http")
+    if "command" in config:
+        if transport != "stdio" or "url" in config:
+            raise WritebackError("Server has conflicting transport fields")
+        if not isinstance(config["command"], str) or not config["command"].strip():
+            raise WritebackError("Server command must be a non-empty string")
+    else:
+        if transport == "stdio":
+            raise WritebackError("Stdio server requires a command")
+        url = config.get("url")
+        if not isinstance(url, str) or any(c.isspace() for c in url):
+            raise WritebackError("Server URL must be an HTTP(S) URL")
+        try:
+            parsed = urlsplit(url)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                raise ValueError
+            _ = parsed.port  # Validate malformed/out-of-range ports.
+        except ValueError:
+            raise WritebackError("Server URL must be an HTTP(S) URL") from None
+    for field in ("args", "tags"):
+        value = config.get(field, [])
+        if not isinstance(value, list) or not all(
+            isinstance(v, str) or (field == "tags" and v is None) for v in value
+        ):
+            raise WritebackError(f"Server {field} must be a list of strings")
+    for field in ("env", "headers"):
+        value = config.get(field, {})
+        if not isinstance(value, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in value.items()
+        ):
+            raise WritebackError(f"Server {field} must map strings to strings")
+
+
 def _config_to_server(name: str, config: dict[str, Any], *, resolve_env: bool = True) -> McpServer:
     """Convert a .mcp-manager.yml server dict to McpServer."""
+    _validate_server_definition(name, config)
     if "command" in config:
         env = config.get("env", {})
         # Resolve shell env vars

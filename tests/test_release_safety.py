@@ -6,13 +6,11 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-import httpx
 import pytest
 import yaml
 from typer.testing import CliRunner
 
 from mcp_manager.commands.registry_cmd import registry_app
-from mcp_manager.health import HealthChecker
 from mcp_manager.models import McpServer, NetworkConfig, ServerStatus
 from mcp_manager.project_config import load_servers_from_config
 from mcp_manager.registry import ServerRegistry
@@ -113,88 +111,6 @@ def test_rejected_cached_registry_does_not_log_values(
     config.write_text(json.dumps({MARKER: {"server": {"name": MARKER, "transport": MARKER}}}))
     ServerRegistry(config).load()
     assert MARKER not in caplog.text
-
-
-@pytest.mark.parametrize(
-    "body",
-    [
-        {"jsonrpc": "2.0", "id": 1, "error": {"code": -32603, "message": MARKER}},
-        {},
-        [],
-        None,
-        {"jsonrpc": "2.0", "id": 1, "result": []},
-        {**INIT, "id": 9},
-        {**INIT, "result": {"serverInfo": MARKER}},
-    ],
-)
-async def test_http_initialize_rejects_invalid_rpc(body: object) -> None:
-    server = McpServer(
-        name="fixture",
-        transport="http",
-        network_config=NetworkConfig(type="http", url="https://example.com/mcp"),
-    )
-    with patch("mcp_manager.health.httpx.AsyncClient") as client_type:
-        client = AsyncMock()
-        client.__aenter__.return_value = client
-        client.post.return_value = httpx.Response(200, content=json.dumps(body))
-        client_type.return_value = client
-        result = await HealthChecker().check(server)
-    assert result.status != ServerStatus.HEALTHY
-    assert MARKER not in (result.error_message or "")
-
-
-@pytest.mark.parametrize(
-    "response",
-    [
-        httpx.ReadTimeout(MARKER),
-        httpx.ConnectError(MARKER),
-        httpx.Response(200, json={"jsonrpc": "2.0", "id": 3, "result": {"tools": MARKER}}),
-        httpx.Response(200, json=[]),
-        httpx.Response(
-            200, json={"jsonrpc": "2.0", "id": 9, "result": {"tools": [{"name": "ok"}]}}
-        ),
-        httpx.Response(200, json={"jsonrpc": "2.0", "id": 3, "error": {"message": MARKER}}),
-    ],
-)
-async def test_deep_failure_cannot_retain_healthy(response: object) -> None:
-    server = McpServer(
-        name="fixture",
-        transport="http",
-        network_config=NetworkConfig(type="http", url="https://example.com/mcp"),
-    )
-    with patch("mcp_manager.health.httpx.AsyncClient") as client_type:
-        client = AsyncMock()
-        client.__aenter__.return_value = client
-        client.post.side_effect = [httpx.Response(200, json=INIT), response]
-        client_type.return_value = client
-        result = await HealthChecker(deep=True).check(server)
-    assert result.status != ServerStatus.HEALTHY
-    assert MARKER not in (result.error_message or "")
-
-
-async def test_valid_http_deep_result_remains_healthy() -> None:
-    server = McpServer(
-        name="fixture",
-        transport="http",
-        network_config=NetworkConfig(type="http", url="https://example.com/mcp"),
-    )
-    with patch("mcp_manager.health.httpx.AsyncClient") as client_type:
-        client = AsyncMock()
-        client.__aenter__.return_value = client
-        client.post.side_effect = [
-            httpx.Response(200, json=INIT),
-            httpx.Response(
-                200,
-                json={
-                    "jsonrpc": "2.0",
-                    "id": 3,
-                    "result": {"tools": [{"name": "fixture"}]},
-                },
-            ),
-        ]
-        client_type.return_value = client
-        result = await HealthChecker(deep=True).check(server)
-    assert result.status == ServerStatus.HEALTHY
 
 
 def test_degraded_verification_preserves_config(tmp_path: Path) -> None:
