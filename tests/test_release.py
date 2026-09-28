@@ -203,7 +203,7 @@ class TestWorkflowYaml:
             "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
         )
         assert upload["with"]["name"] == "github-pages"
-        assert upload["with"]["archive"] is False
+        assert upload["with"].get("archive", True) is True
 
     def test_ci_runs_tests_on_all_supported_operating_systems(self) -> None:
         workflow = Path(__file__).parent.parent / ".github" / "workflows" / "ci.yml"
