@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -19,7 +20,7 @@ class TestServerMonitorInit:
             McpServer(
                 name="stdio",
                 transport=TransportType.STDIO,
-                stdio_config=StdioConfig(command="python3", args=["-c", "pass"]),
+                stdio_config=StdioConfig(command=sys.executable, args=["-c", "pass"]),
             ),
             McpServer(
                 name="sse",
@@ -51,11 +52,30 @@ class TestServerMonitorRun:
         assert result == {}
 
     @pytest.mark.asyncio
+    async def test_runs_without_event_loop_signal_support(self) -> None:
+        server = McpServer(
+            name="portable",
+            transport=TransportType.STDIO,
+            stdio_config=StdioConfig(command=sys.executable, args=["-c", "pass"]),
+        )
+        monitor = ServerMonitor([server])
+        monitor._shutdown_event.set()
+        loop = asyncio.get_running_loop()
+
+        with patch.object(loop, "add_signal_handler", side_effect=NotImplementedError):
+            result = await monitor.run()
+
+        assert result["portable"]["restart_count"] == 0
+
+    @pytest.mark.asyncio
     async def test_start_and_stop(self) -> None:
         server = McpServer(
             name="sleep",
             transport=TransportType.STDIO,
-            stdio_config=StdioConfig(command="sleep", args=["30"]),
+            stdio_config=StdioConfig(
+                command=sys.executable,
+                args=["-c", "import time; time.sleep(30)"],
+            ),
         )
         monitor = ServerMonitor([server], restart_delay=0.1)
 
@@ -86,7 +106,10 @@ class TestServerMonitorRun:
         server = McpServer(
             name="sleep",
             transport=TransportType.STDIO,
-            stdio_config=StdioConfig(command="sleep", args=["30"]),
+            stdio_config=StdioConfig(
+                command=sys.executable,
+                args=["-c", "import time; time.sleep(30)"],
+            ),
         )
         monitor = ServerMonitor([server], restart_delay=0.1)
         task = asyncio.create_task(monitor.run())
@@ -114,7 +137,10 @@ class TestServerMonitorSummary:
         server = McpServer(
             name="test",
             transport=TransportType.STDIO,
-            stdio_config=StdioConfig(command="sleep", args=["1"]),
+            stdio_config=StdioConfig(
+                command=sys.executable,
+                args=["-c", "import time; time.sleep(1)"],
+            ),
         )
         monitor = ServerMonitor([server])
         monitor._states["test"].restart_count = 3
@@ -157,7 +183,7 @@ class TestServerMonitorEdgeCases:
         server = McpServer(
             name="quick-exit",
             transport=TransportType.STDIO,
-            stdio_config=StdioConfig(command="python3", args=["-c", ""]),
+            stdio_config=StdioConfig(command=sys.executable, args=["-c", ""]),
         )
         monitor = ServerMonitor([server], restart_delay=0.1, max_restart_delay=1.0)
 
@@ -176,7 +202,10 @@ class TestServerMonitorEdgeCases:
         server = McpServer(
             name="sleep-exit",
             transport=TransportType.STDIO,
-            stdio_config=StdioConfig(command="sleep", args=["30"]),
+            stdio_config=StdioConfig(
+                command=sys.executable,
+                args=["-c", "import time; time.sleep(30)"],
+            ),
         )
         monitor = ServerMonitor([server], restart_delay=10.0)
 
@@ -203,7 +232,7 @@ class TestServerMonitorStress:
         server = McpServer(
             name="crash-loop",
             transport=TransportType.STDIO,
-            stdio_config=StdioConfig(command="python3", args=["-c", ""]),
+            stdio_config=StdioConfig(command=sys.executable, args=["-c", ""]),
         )
         monitor = ServerMonitor([server], restart_delay=0.1, max_restart_delay=0.5)
 
@@ -223,7 +252,10 @@ class TestServerMonitorStress:
         server = McpServer(
             name="sleep",
             transport=TransportType.STDIO,
-            stdio_config=StdioConfig(command="sleep", args=["30"]),
+            stdio_config=StdioConfig(
+                command=sys.executable,
+                args=["-c", "import time; time.sleep(30)"],
+            ),
         )
         monitor = ServerMonitor([server], restart_delay=0.1)
 

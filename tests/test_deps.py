@@ -13,6 +13,31 @@ from mcp_manager.models import McpServer, StdioConfig, TransportType
 class TestCheckDependencies:
     """Unit tests for check_dependencies."""
 
+    @pytest.mark.parametrize("command", ["python", "python3", "uvx"])
+    def test_only_configured_launcher_is_required(self, monkeypatch, command) -> None:
+        monkeypatch.setattr(shutil, "which", lambda cmd: f"/bin/{cmd}" if cmd == command else None)
+        server = McpServer(
+            name="single-launcher",
+            transport=TransportType.STDIO,
+            stdio_config=StdioConfig(command=command),
+        )
+        assert check_dependencies(server) == []
+
+    @pytest.mark.parametrize("available", [True, False])
+    def test_uses_child_path_instead_of_parent_path(self, monkeypatch, available) -> None:
+        def lookup(command, *, path=None):
+            if path == "/fixture/bin":
+                return f"{path}/{command}" if available else None
+            return None if available else f"/parent/bin/{command}"
+
+        monkeypatch.setattr(shutil, "which", lookup)
+        server = McpServer(
+            name="custom-path",
+            transport=TransportType.STDIO,
+            stdio_config=StdioConfig(command="python3", env={"PATH": "/fixture/bin"}),
+        )
+        assert check_dependencies(server) == ([] if available else ["python3"])
+
     def test_network_server_returns_empty(self) -> None:
         server = McpServer(
             name="sse-server",

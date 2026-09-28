@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -98,6 +99,24 @@ class TestRegistryBasics:
 
 
 class TestRegistryPersistence:
+    def test_failed_replace_preserves_saved_registry(self, tmp_path: Path) -> None:
+        path = tmp_path / "reg.json"
+        reg = ServerRegistry(path=path)
+        reg.add(_make_server("original"))
+        reg.save()
+        baseline = path.read_bytes()
+        reg.add(_make_server("new"))
+        with (
+            patch("mcp_manager.atomic.os.replace", side_effect=OSError("synthetic failure")),
+            pytest.raises(RegistryError, match="Failed to save"),
+        ):
+            reg.save()
+        assert path.read_bytes() == baseline
+        assert not list(tmp_path.glob(".reg.json-tmp-*"))
+        reloaded = ServerRegistry(path=path)
+        reloaded.load()
+        assert [entry.server.name for entry in reloaded.list_all()] == ["original"]
+
     def test_save_and_load(self, tmp_path: Path) -> None:
         path = tmp_path / "reg.json"
 

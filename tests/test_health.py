@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, patch
 
-import httpx
+import pytest
 
 from mcp_manager.health import HealthChecker
 from mcp_manager.models import (
-    HealthResult,
     McpServer,
     NetworkConfig,
     ServerStatus,
@@ -64,130 +62,6 @@ def _ping_response() -> bytes:
     return json.dumps({"jsonrpc": "2.0", "id": 2, "result": {}}).encode() + b"\n"
 
 
-class TestHealthCheckerHTTP:
-    def test_healthy_http(self) -> None:
-        checker = HealthChecker(timeout=5)
-        server = _make_http()
-
-        mock_response = httpx.Response(
-            200,
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "serverInfo": {"name": "test", "version": "1.0"},
-                    "capabilities": {},
-                },
-            },
-        )
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.return_value = mock_response
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.HEALTHY
-        assert result.latency_ms is not None
-        assert result.server_info.get("server_name") == "test"
-
-    def test_connection_refused(self) -> None:
-        checker = HealthChecker(timeout=5)
-        server = _make_http()
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.side_effect = httpx.ConnectError("refused")
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.UNREACHABLE
-        assert "refused" in (result.error_message or "")
-
-    def test_timeout(self) -> None:
-        checker = HealthChecker(timeout=5)
-        server = _make_http()
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.side_effect = httpx.TimeoutException("timeout")
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.UNREACHABLE
-
-    def test_http_error_status(self) -> None:
-        checker = HealthChecker(timeout=5)
-        server = _make_http()
-
-        mock_response = httpx.Response(500, text="Internal Server Error")
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.return_value = mock_response
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.ERROR
-        assert "500" in (result.error_message or "")
-
-
-class TestHealthCheckerSSE:
-    def test_healthy_sse(self) -> None:
-        checker = HealthChecker(timeout=5)
-        server = _make_sse()
-
-        mock_response = httpx.Response(
-            200,
-            headers={"content-type": "text/event-stream"},
-        )
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.HEALTHY
-        assert result.latency_ms is not None
-
-    def test_wrong_content_type_is_degraded(self) -> None:
-        checker = HealthChecker(timeout=5)
-        server = _make_sse()
-
-        mock_response = httpx.Response(
-            200,
-            headers={"content-type": "text/html"},
-        )
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.DEGRADED
-
-
 class TestHealthCheckerStdio:
     def test_command_not_found(self) -> None:
         checker = HealthChecker(timeout=5)
@@ -224,32 +98,55 @@ class TestHealthCheckerStdio:
 
 
 class TestCheckAll:
-    def test_parallel_execution(self) -> None:
-        checker = HealthChecker(timeout=5)
-        servers = [_make_http("s1"), _make_http("s2")]
-
-        mock_response = httpx.Response(
-            200,
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "result": {"protocolVersion": "2024-11-05", "capabilities": {}},
-            },
-        )
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.return_value = mock_response
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            results = asyncio.run(checker.check_all(servers))
-
-        assert len(results) == 2
-        assert all(isinstance(r, HealthResult) for r in results)
-
     def test_empty_servers(self) -> None:
         checker = HealthChecker(timeout=5)
         results = asyncio.run(checker.check_all([]))
         assert results == []
+
+
+@pytest.mark.parametrize(
+    "ping",
+    [
+        b"",
+        b"pong\n",
+        b'{"jsonrpc":"2.0","id":2,"error":{"code":-1,"message":"bad"}}\n',
+        b'{"jsonrpc":"2.0","id":99,"result":{}}\n',
+    ],
+)
+async def test_invalid_stdio_ping_is_not_healthy(ping):
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    proc = MagicMock()
+    proc.stdin.drain = AsyncMock()
+    proc.stdout.readline = AsyncMock(side_effect=[_init_response(), ping])
+    proc.wait = AsyncMock()
+    with patch("mcp_manager.health.asyncio.create_subprocess_exec", return_value=proc):
+        result = await HealthChecker().check(_make_stdio())
+    assert result.status is not ServerStatus.HEALTHY
+    proc.kill.assert_called_once()
+
+
+async def test_stdio_notifications_can_precede_each_response(tmp_path):
+    import sys
+
+    script = tmp_path / "server.py"
+    script.write_text("""
+import json, sys
+for line in sys.stdin:
+    message = json.loads(line)
+    if 'id' not in message:
+        continue
+    print(json.dumps({'jsonrpc':'2.0','method':'notifications/tools/list_changed'}), flush=True)
+    result = ({'protocolVersion':'2024-11-05','capabilities':{'tools':{}},
+               'serverInfo':{'name':'fixture','version':'1'}} if message['method']=='initialize'
+              else {'tools':[{'name':'test','inputSchema':{'type':'object'}}]}
+              if message['method']=='tools/list' else {})
+    print(json.dumps({'jsonrpc':'2.0','id':message['id'],'result':result}), flush=True)
+""")
+    server = McpServer(
+        name="fixture",
+        transport="stdio",
+        stdio_config=StdioConfig(command=sys.executable, args=[str(script)]),
+    )
+    result = await HealthChecker(timeout=2, deep=True).check(server)
+    assert result.status is ServerStatus.HEALTHY

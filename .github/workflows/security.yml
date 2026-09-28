@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
@@ -26,25 +28,13 @@ jobs:
           pip install pip-audit bandit[toml]
 
       - name: Run pip-audit (CVE scan)
-        run: |
-          if [ -f uv.lock ]; then
-            pip install uv
-            uv export --format requirements-txt --no-hashes | pip-audit --desc -r /dev/stdin
-          elif [ -f pyproject.toml ]; then
-            pip-audit --desc
-          elif [ -f requirements.txt ]; then
-            pip-audit --desc -r requirements.txt
-          else
-            echo "No lock file found — running directory scan"
-            pip-audit --desc
-          fi
+        run: pip-audit --strict --desc=on .
 
       - name: Run Bandit (security lint)
         run: |
-          bandit -r . -f json -o bandit-report.json \
+          bandit -r src -f json -o bandit-report.json \
             -ll \
-            --exclude './.git,./venv,./.venv,./node_modules,./tests' \
-            || true
+            --exclude './tests'
 
       - name: Upload Bandit report
         if: always()
@@ -53,3 +43,21 @@ jobs:
           name: bandit-report
           path: bandit-report.json
           if-no-files-found: ignore
+
+      - name: Install Gitleaks
+        if: always()
+        env:
+          GITLEAKS_VERSION: "8.30.0"
+          GITLEAKS_SHA256: "79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e"
+        run: |
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            --output "$archive"
+          echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP" gitleaks
+
+      - name: Scan repository history for secrets
+        if: always()
+        run: |
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --verbose .

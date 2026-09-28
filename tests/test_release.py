@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -114,15 +115,23 @@ class TestBuild:
     """Ensure the package builds cleanly."""
 
     @pytest.mark.slow
-    def test_build_succeeds(self) -> None:
+    def test_build_succeeds(self, tmp_path: Path) -> None:
         repo = Path(__file__).parent.parent
         result = subprocess.run(
-            [sys.executable, "-m", "build"],
+            [sys.executable, "-m", "build", "--outdir", str(tmp_path)],
             cwd=repo,
             capture_output=True,
             text=True,
         )
         assert result.returncode == 0, result.stderr
+
+        sdist = next(tmp_path.glob("*.tar.gz"))
+        with tarfile.open(sdist, "r:gz") as archive:
+            members = {Path(name) for name in archive.getnames()}
+        packaged_paths = {path.relative_to(path.parts[0]) for path in members if path.parts}
+        assert Path("action.yml") in packaged_paths
+        assert Path("docs/production-readiness.md") in packaged_paths
+        assert Path("docs/security-model.md") in packaged_paths
 
     def test_build_requires_build(self) -> None:
         """Lightweight sanity check: build module is importable."""
@@ -146,6 +155,36 @@ class TestWorkflowYaml:
         assert "Create GitHub Release" in names
         assert "Publish to PyPI" in names
 
+    def test_integrity_assets_are_not_pypi_distribution_inputs(self, tmp_path: Path) -> None:
+        workflow = Path(__file__).parent.parent / ".github" / "workflows" / "release.yml"
+        steps = yaml.safe_load(workflow.read_text())["jobs"]["release"]["steps"]
+        publish = next(s for s in steps if s.get("name") == "Publish to PyPI")
+        attach = next(s for s in steps if s.get("name") == "Create GitHub Release")
+        integrity = next(
+            s for s in steps if s.get("name") == "Generate release integrity artifacts"
+        )
+        # Model the publisher's wildcard expansion, including GitHub release attachments.
+        for directory, files in {
+            "dist": ["arete_mcp-1.0.0-py3-none-any.whl", "arete_mcp-1.0.0.tar.gz"],
+            "release-assets": ["arete-mcp-sbom.json", "SHA256SUMS"],
+        }.items():
+            (tmp_path / directory).mkdir()
+            for filename in files:
+                (tmp_path / directory / filename).write_text("fixture")
+        package_dir = publish.get("with", {}).get("packages-dir", "dist/")
+        uploaded = list((tmp_path / package_dir).glob("*"))
+        assert len(uploaded) == 2
+        assert all(p.name.endswith((".whl", ".tar.gz")) for p in uploaded)
+        attachments = {
+            p.name
+            for pattern in attach["with"]["files"].splitlines()
+            for p in tmp_path.glob(pattern)
+        }
+        assert attachments == {p.name for p in uploaded} | {"arete-mcp-sbom.json", "SHA256SUMS"}
+        assert "--output release-assets/arete-mcp-sbom.json" in integrity["run"]
+        assert "(cd dist && sha256sum *.whl *.tar.gz)" in integrity["run"]
+        assert "(cd release-assets && sha256sum arete-mcp-sbom.json)" in integrity["run"]
+
     def test_validate_action_provisions_pinned_uv(self) -> None:
         action = (
             Path(__file__).parent.parent
@@ -158,4 +197,87 @@ class TestWorkflowYaml:
         assert data["inputs"]["uv-version"]["default"] == "0.11.7"
         steps = data["runs"]["steps"]
         install_uv = next(step for step in steps if step.get("name") == "Install uv runtime")
-        assert "uv==${{ inputs.uv-version }}" in install_uv["run"]
+        assert install_uv["env"]["MCP_MANAGER_UV_VERSION"] == "${{ inputs.uv-version }}"
+        assert "uv==$MCP_MANAGER_UV_VERSION" in install_uv["run"]
+
+    def test_security_workflow_fails_closed(self) -> None:
+        workflow = Path(__file__).parent.parent / ".github" / "workflows" / "security.yml"
+        text = workflow.read_text()
+        data = yaml.safe_load(text)
+        steps = data["jobs"]["audit"]["steps"]
+        commands = "\n".join(str(step.get("run", "")) for step in steps)
+        actions = [str(step.get("uses", "")) for step in steps]
+        checkout = next(
+            step for step in steps if str(step.get("uses", "")).startswith("actions/checkout@")
+        )
+        install_gitleaks = next(step for step in steps if step.get("name") == "Install Gitleaks")
+
+        assert "pip-audit --strict --desc=on ." in commands
+        assert "|| true" not in commands
+        assert install_gitleaks["env"]["GITLEAKS_VERSION"] == "8.30.0"
+        assert install_gitleaks["env"]["GITLEAKS_SHA256"] == (
+            "79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e"
+        )
+        assert "sha256sum --check --strict" in commands
+        assert 'gitleaks" git --redact --no-banner --verbose .' in commands
+        assert not any(action.startswith("gitleaks/") for action in actions)
+        assert checkout["with"]["fetch-depth"] == 0
+
+    def test_docs_workflow_uses_allowlisted_pages_artifact_upload(self) -> None:
+        workflow = Path(__file__).parent.parent / ".github" / "workflows" / "docs.yml"
+        data = yaml.safe_load(workflow.read_text())
+        steps = data["jobs"]["build"]["steps"]
+        upload = next(step for step in steps if step.get("name") == "Upload Pages artifact")
+
+        assert upload["uses"] == (
+            "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+        )
+        assert upload["with"]["name"] == "github-pages"
+        assert upload["with"].get("archive", True) is True
+
+    def test_ci_runs_tests_on_all_supported_operating_systems(self) -> None:
+        workflow = Path(__file__).parent.parent / ".github" / "workflows" / "ci.yml"
+        data = yaml.safe_load(workflow.read_text())
+        test_job = data["jobs"]["test"]
+
+        assert test_job["runs-on"] == "${{ matrix.os }}"
+        assert test_job["strategy"]["matrix"]["os"] == [
+            "ubuntu-latest",
+            "macos-latest",
+            "windows-latest",
+        ]
+        package_job = data["jobs"]["package"]
+        assert package_job["runs-on"] == "${{ matrix.os }}"
+        assert package_job["strategy"]["matrix"]["os"] == test_job["strategy"]["matrix"]["os"]
+        commands = "\n".join(str(step.get("run", "")) for step in package_job["steps"])
+        assert "scripts/rc_dogfood.py --wheel" in commands
+
+    def test_release_critical_workflows_do_not_hide_failures(self) -> None:
+        root = Path(__file__).parent.parent / ".github" / "workflows"
+        for name in ("docs.yml", "marketplace-refresh.yml", "security.yml"):
+            assert "continue-on-error: true" not in (root / name).read_text()
+
+    def test_root_action_uses_environment_for_shell_inputs(self) -> None:
+        action = Path(__file__).parent.parent / "action.yml"
+        data = yaml.safe_load(action.read_text())
+
+        assert data["runs"]["using"] == "composite"
+        for step in data["runs"]["steps"]:
+            if "run" in step:
+                assert "${{ inputs.path }}" not in step["run"]
+                assert "${{ inputs.strict }}" not in step["run"]
+
+    def test_marketplace_refresh_has_bounded_safe_execution(self) -> None:
+        workflow = (
+            Path(__file__).parent.parent / ".github" / "workflows" / "marketplace-refresh.yml"
+        )
+        data = yaml.safe_load(workflow.read_text())
+        job = data["jobs"]["refresh"]
+        assert job["timeout-minutes"] == 15
+        refresh = next(
+            step for step in job["steps"] if step.get("name") == "Refresh marketplace scores"
+        )
+        assert "timeout --signal=TERM --kill-after=30s 10m" in refresh["run"]
+        assert "args+=(--dry-run)" in refresh["run"]
+        commit = next(step for step in job["steps"] if step.get("name") == "Commit updated scores")
+        assert commit["if"] == "github.event_name == 'schedule' || inputs.write_changes"

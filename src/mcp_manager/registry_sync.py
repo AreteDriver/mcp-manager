@@ -6,9 +6,7 @@ Fetch, diff, merge, and write server definitions from remote registries.
 from __future__ import annotations
 
 import json
-import logging
 import shutil
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,6 +14,7 @@ from typing import Any
 import httpx
 import yaml
 
+from mcp_manager.atomic import atomic_write_text
 from mcp_manager.exceptions import WritebackError
 from mcp_manager.health import HealthChecker
 from mcp_manager.models import McpServer, ServerStatus, TransportType
@@ -24,8 +23,8 @@ from mcp_manager.project_config import (
     parse_project_config,
 )
 
-logger = logging.getLogger(__name__)
 _BACKUP_SUFFIX = ".mcp-manager-backup"
+_MAX_REGISTRY_BYTES = 5 * 1024 * 1024
 
 
 @dataclass
@@ -40,7 +39,8 @@ class RegistryDiff:
 def fetch_remote_servers(url: str, headers: dict[str, str] | None = None) -> list[McpServer]:
     """Fetch server definitions from a remote URL.
 
-    Supports YAML and JSON. Returns a list of McpServer objects.
+    Supports YAML and JSON. Returns a list of McpServer objects only when
+    every entry is valid. An incomplete import must never reach a replace write.
 
     Args:
         url: HTTP(S) URL pointing to a registry file.
@@ -53,32 +53,53 @@ def fetch_remote_servers(url: str, headers: dict[str, str] | None = None) -> lis
         WritebackError: On fetch or parse failure.
     """
     try:
-        resp = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
+        resp = httpx.get(
+            url,
+            headers=headers,
+            timeout=15,
+            follow_redirects=not bool(headers),
+        )
+        if headers and 300 <= resp.status_code < 400:
+            raise WritebackError(
+                "Authenticated registry redirects are refused to prevent credential leakage"
+            )
         resp.raise_for_status()
     except httpx.HTTPError as exc:
-        raise WritebackError(f"Failed to fetch registry {url}: {exc}") from exc
+        # URLs, response text and exception details may contain credentials.
+        raise WritebackError(f"Failed to fetch remote registry ({type(exc).__name__})") from None
+
+    if len(resp.text.encode("utf-8")) > _MAX_REGISTRY_BYTES:
+        raise WritebackError(f"Remote registry exceeds the {_MAX_REGISTRY_BYTES}-byte limit")
 
     try:
         raw = json.loads(resp.text) if url.endswith(".json") else yaml.safe_load(resp.text)
-    except (yaml.YAMLError, json.JSONDecodeError) as exc:
-        raise WritebackError(f"Failed to parse registry from {url}: {exc}") from exc
+    except (yaml.YAMLError, json.JSONDecodeError):
+        raise WritebackError("Failed to parse remote registry as YAML/JSON") from None
 
     if not isinstance(raw, dict):
-        raise WritebackError(f"Remote registry at {url} must contain a mapping")
+        raise WritebackError("Remote registry must contain a mapping")
 
     servers_raw = raw.get("servers", raw)
     if not isinstance(servers_raw, dict):
-        raise WritebackError(f"No servers found in registry at {url}")
+        raise WritebackError("No servers found: remote 'servers' must be a mapping")
 
     results: list[McpServer] = []
-    for name, config in servers_raw.items():
-        if not isinstance(config, dict):
-            logger.warning("Skipping non-dict entry %r", name)
-            continue
+    for index, (name, config) in enumerate(servers_raw.items(), start=1):
+        # Report a position rather than untrusted names/values or validation
+        # exception text. Remote documents may embed literal credentials.
+        error = f"Invalid registry entry {index}; the entire import was rejected"
+        if not isinstance(name, str) or not name or not isinstance(config, dict):
+            raise WritebackError(error)
+        for field in ("env", "headers"):
+            if field in config and not isinstance(config[field], dict):
+                raise WritebackError(error)
+        for field in ("args", "tags"):
+            if field in config and not isinstance(config[field], list):
+                raise WritebackError(error)
         try:
-            results.append(_config_to_server(name, config))
-        except (WritebackError, KeyError, TypeError, ValueError) as exc:
-            logger.warning("Failed to parse server %r: %s", name, exc)
+            results.append(_config_to_server(name, config, resolve_env=False))
+        except (WritebackError, KeyError, TypeError, ValueError):
+            raise WritebackError(error) from None
 
     return results
 
@@ -116,7 +137,7 @@ def merge_servers(
     Args:
         local: Currently configured servers.
         remote: Servers from the remote registry.
-        strategy: "union" (local wins on name collision) or "replace".
+        strategy: "union" (remote wins on name collision) or "replace".
 
     Returns:
         Merged server list.
@@ -124,7 +145,7 @@ def merge_servers(
     if strategy == "replace":
         return remote
 
-    # union (default): remote merged into local; local names win on conflict
+    # union (default): retain local-only entries, update shared names from remote
     remote_by_name = {s.name: s for s in remote}
     merged: list[McpServer] = []
     for s in local:
@@ -148,9 +169,11 @@ def verify_servers(servers: list[McpServer]) -> list[tuple[McpServer, ServerStat
     import asyncio
 
     checker = HealthChecker(timeout=10, deep=False)
+    # Resolve only temporary runtime copies, never the objects later written to disk.
+    runtime_servers = [_config_to_server(s.name, _server_to_config(s)) for s in servers]
     return [
         (s, result.status, result.error_message)
-        for s, result in zip(servers, asyncio.run(checker.check_all(servers)), strict=True)
+        for s, result in zip(servers, asyncio.run(checker.check_all(runtime_servers)), strict=True)
     ]
 
 
@@ -214,14 +237,9 @@ def _server_to_config(server: McpServer) -> dict[str, Any]:
 def _atomic_write(path: Path, data: dict[str, Any]) -> None:
     """Write YAML atomically via a temp file."""
     try:
-        fd, tmp_path = tempfile.mkstemp(
-            dir=path.parent,
-            prefix=f".{path.name}-tmp-",
-            suffix=".yml",
-        )
-        with open(fd, "w", encoding="utf-8") as fh:
-            yaml.dump(data, fh, default_flow_style=False, sort_keys=False)
-            fh.write("\n")
-        Path(tmp_path).rename(path)
+        text = yaml.dump(data, default_flow_style=False, sort_keys=False)
+        if not text.endswith("\n"):
+            text += "\n"
+        atomic_write_text(path, text)
     except OSError as exc:
         raise WritebackError(f"Failed to write {path}: {exc}") from exc

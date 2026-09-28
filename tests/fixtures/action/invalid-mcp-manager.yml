@@ -1,0 +1,4 @@
+project: invalid-action-fixture
+servers:
+  invalid:
+    args: []

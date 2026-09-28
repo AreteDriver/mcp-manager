@@ -68,9 +68,12 @@ class TestAuthStore:
         store.add("https://example.com/reg.yaml", AuthProfile(type=AuthType.BEARER, token="t"))
         store.save()
         mode = (tmp_path / "auth.json").stat().st_mode
-        assert mode & 0o777 == 0o600
+        if os.name != "nt":
+            assert mode & 0o777 == 0o600
 
     def test_check_permissions_warns_on_overly_permissive(self, tmp_path: Path) -> None:
+        if os.name == "nt":
+            pytest.skip("Windows permissions are ACL-based")
         auth_file = tmp_path / "auth.json"
         auth_file.write_text("{}", encoding="utf-8")
         os.chmod(auth_file, 0o644)
