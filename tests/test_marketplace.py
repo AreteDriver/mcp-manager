@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import yaml
@@ -18,7 +18,7 @@ from mcp_manager.marketplace import (
     load_index,
     refresh_marketplace,
 )
-from mcp_manager.models import StdioConfig, TransportType
+from mcp_manager.models import HealthResult, ServerStatus, StdioConfig, TransportType
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -465,11 +465,13 @@ def test_refresh_dry_run_does_not_write(tmp_path: Path) -> None:
     index_file.write_text(original_text)
 
     import asyncio
-    from unittest.mock import MagicMock
 
-    mock_result = MagicMock()
-    mock_result.status.name = "HEALTHY"
-    mock_result.server_info = {"tool_count": 7}
+    mock_result = HealthResult(
+        server_name="test",
+        status=ServerStatus.HEALTHY,
+        transport=TransportType.STDIO,
+        server_info={"tool_count": 7},
+    )
 
     original_run = asyncio.run
 
@@ -487,6 +489,56 @@ def test_refresh_dry_run_does_not_write(tmp_path: Path) -> None:
     assert updated is True
     # File should be unchanged
     assert index_file.read_text() == original_text
+
+
+def test_refresh_supports_network_entries_and_reports_progress(tmp_path: Path) -> None:
+    """Network marketplace entries are checked without assuming stdio."""
+    index_file = tmp_path / "index.yaml"
+    index_file.write_text(
+        yaml.dump(
+            {
+                "categories": [],
+                "servers": [
+                    {
+                        "name": "remote",
+                        "display_name": "Remote",
+                        "description": "d",
+                        "repository": "https://github.com/a/b",
+                        "categories": [],
+                        "install_spec": {"type": "sse", "url": "http://localhost:3001/sse"},
+                        "quality": {},
+                    }
+                ],
+            }
+        )
+    )
+    result = HealthResult(
+        server_name="remote",
+        status=ServerStatus.UNREACHABLE,
+        transport=TransportType.SSE,
+    )
+    progress: list[str] = []
+
+    with patch(
+        "mcp_manager.health.HealthChecker.check",
+        new=AsyncMock(return_value=result),
+    ) as check:
+        updated = refresh_marketplace(
+            index_file,
+            timeout=5,
+            dry_run=True,
+            progress=progress.append,
+        )
+
+    assert updated is True
+    checked_server = check.await_args.args[0]
+    assert checked_server.transport == TransportType.SSE
+    assert checked_server.network_config is not None
+    assert checked_server.network_config.url == "http://localhost:3001/sse"
+    assert progress == [
+        "[1/1] checking remote",
+        "[1/1] remote: health=0%, tools=0",
+    ]
 
 
 def test_install_missing_env_no_interactive(tmp_path: Path) -> None:
