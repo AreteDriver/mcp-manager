@@ -70,8 +70,10 @@ jobs:
 
       - name: Generate release integrity artifacts
         run: |
-          pip-audit --strict --format cyclonedx-json --output dist/arete-mcp-sbom.json .
-          sha256sum dist/*.whl dist/*.tar.gz dist/arete-mcp-sbom.json > dist/SHA256SUMS
+          mkdir -p release-assets
+          pip-audit --strict --format cyclonedx-json --output release-assets/arete-mcp-sbom.json .
+          (cd dist && sha256sum *.whl *.tar.gz) > release-assets/SHA256SUMS
+          (cd release-assets && sha256sum arete-mcp-sbom.json) >> release-assets/SHA256SUMS
 
       - name: Extract CHANGELOG section
         id: changelog
@@ -94,7 +96,11 @@ jobs:
         with:
           generate_release_notes: true
           body_path: ${{ runner.temp }}/changelog_body.md
-          files: dist/*
+          files: |
+            dist/*
+            release-assets/*
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # release/v1
+        with:
+          packages-dir: dist/

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from mcp_manager.atomic import atomic_write_text
 from mcp_manager.config import MANAGER_REGISTRY_FILE
 from mcp_manager.exceptions import RegistryError
 from mcp_manager.models import HealthResult, McpServer, RegistryEntry
@@ -51,9 +52,10 @@ class ServerRegistry:
             for name, entry in self._entries.items()
         }
         try:
-            self._path.write_text(
+            atomic_write_text(
+                self._path,
                 json.dumps(data, indent=2) + "\n",
-                encoding="utf-8",
+                mode=0o600,
             )
         except OSError as exc:
             raise RegistryError(f"Failed to save registry: {exc}") from exc

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -547,3 +548,80 @@ def test_install_missing_env_no_interactive(tmp_path: Path) -> None:
     config_path = install_to_project(srv, tmp_path, interactive=False)
     data = yaml.safe_load(config_path.read_text())
     assert data["servers"]["alpha"]["env"]["URL"] == "${DATABASE_URL}"
+
+
+@pytest.mark.parametrize(
+    "mode, expected_health, expected_count",
+    [
+        ("valid", 1.0, 2),
+        ("empty", 0.5, 0),
+        ("cycle", 0.5, 0),
+        ("invalid", 0.5, 0),
+        ("wrong_id", 0.5, 0),
+        ("empty_name", 0.5, 0),
+        ("duplicate_name", 0.5, 0),
+    ],
+)
+def test_refresh_uses_real_paginated_stdio_listing(
+    tmp_path: Path,
+    mode: str,
+    expected_health: float,
+    expected_count: int,
+) -> None:
+    """A successful ping cannot replace validated, complete tool discovery."""
+    script = tmp_path / "server.py"
+    script.write_text("""import json, sys
+mode = sys.argv[1]
+seen_ids = set()
+for line in sys.stdin:
+    message = json.loads(line)
+    if "id" not in message:
+        continue
+    if message["id"] in seen_ids:
+        print(json.dumps({"jsonrpc": "2.0", "id": message["id"],
+                          "error": {"code": -32600, "message": "Reused request ID"}}), flush=True)
+        continue
+    seen_ids.add(message["id"])
+    if message["method"] == "initialize":
+        result = {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}},
+                  "serverInfo": {"name": "fixture", "version": "1"}}
+    elif message["method"] == "tools/list":
+        cursor = message.get("params", {}).get("cursor")
+        tool = {"name": "first" if cursor is None else "second",
+                "inputSchema": {"type": "object"}}
+        result = {"tools": [tool]}
+        if mode == "empty":
+            result = {"tools": []}
+        elif cursor is None or mode == "cycle":
+            result["nextCursor"] = "second"
+        elif mode == "invalid":
+            result = {"tools": [{"name": "missing-schema"}]}
+        elif mode == "wrong_id":
+            message["id"] = 3
+        elif mode == "empty_name":
+            tool["name"] = ""
+        elif mode == "duplicate_name":
+            tool["name"] = "first"
+    else:
+        result = {}
+    print(json.dumps({"jsonrpc": "2.0", "id": message["id"], "result": result}), flush=True)
+""")
+    index_file = tmp_path / "index.yaml"
+    index_file.write_text(
+        yaml.safe_dump(
+            {
+                "categories": [],
+                "servers": [
+                    {
+                        "name": "fixture",
+                        "install_spec": {"command": sys.executable, "args": [str(script), mode]},
+                        "quality": {"tool_count": 99},
+                    }
+                ],
+            }
+        )
+    )
+    refresh_marketplace(index_file, timeout=2)
+    quality = load_index(index_file).servers["fixture"].quality
+    assert quality.health_pass_rate == expected_health
+    assert quality.tool_count == expected_count

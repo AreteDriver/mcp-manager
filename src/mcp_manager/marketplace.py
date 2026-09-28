@@ -280,7 +280,7 @@ def refresh_marketplace(
     for position, server in enumerate(index.servers.values(), start=1):
         if progress is not None:
             progress(f"[{position}/{total}] checking {server.name}")
-        checker = HealthChecker(timeout=timeout)
+        checker = HealthChecker(timeout=timeout, deep=True)
         try:
             if server.is_stdio:
                 mcp_server = McpServer(

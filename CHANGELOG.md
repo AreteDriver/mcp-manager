@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0] — 2026-09-01
+## [1.0.0] — Unreleased candidate
 
 ### Added
 
@@ -32,6 +32,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same-directory atomic replacement implementation.
 - Security, documentation, marketplace, packaging, and release workflows now
   fail closed.
+
+### Fixed
+
+- Registry imports preserve environment references and reject malformed remote entries before replacing local configuration.
+- HTTP and SSE health checks complete SDK sessions and validate protocol/tool results; stdio handles interleaved notifications.
+- Marketplace refresh dispatches by transport, validates complete paginated tool listings, bounds job and process cleanup, and defaults manual runs to dry-run.
+- Dependency probes check the configured launcher on its child PATH without requiring unrelated Python aliases.
+- Local registry saves preserve the previous file if atomic replacement fails.
+- Release integrity attachments are kept outside the package-only PyPI upload directory.
+- Pages uploads preserve the required `github-pages` artifact name.
 
 ### Security
 

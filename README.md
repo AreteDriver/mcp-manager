@@ -22,7 +22,7 @@ Think of it as **docker-compose for MCP** — a single `.mcp-manager.yml` in you
 
 ## Current status and limitations
 
-This is a production-stable independent project distributed on PyPI. It manages configuration and diagnostics; it does not host MCP servers or guarantee the behavior of third-party servers and clients. See [Status](#status), [Production Readiness](docs/production-readiness.md), and [Security](SECURITY.md) for the supported contract.
+This branch is the integrated v1.0.0 release candidate. Publication and real-client acceptance are still pending; installing from PyPI does not install this candidate until the release is published. It manages configuration and diagnostics; it does not host MCP servers or guarantee the behavior of third-party servers and clients. See [Status](#status), [Production Readiness](docs/production-readiness.md), and [Security](SECURITY.md) for the supported contract.
 
 ## Why mcp-manager?
 

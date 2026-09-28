@@ -40,46 +40,80 @@ scans repository history with Gitleaks, runs CodeQL, exercises the public root
 Action against valid and invalid configs, and installs the built wheel into a
 fresh environment.
 
-## Release-candidate dogfood
+## Candidate evidence and acceptance
 
-Record evidence for all of the following on the proposed release commit:
+The integrated candidate combines production hardening (PR #20), bounded
+marketplace refresh (PR #21), and architecture/Pages repairs (PR #22). Its
+source version is 1.0.0; that version string does not establish publication.
+Every release receipt must record the full commit SHA, artifact SHA-256,
+platform/Python and client versions, commands, results and unresolved items.
+Do not carry a passing result from a parent branch forward as final-candidate
+qualification. The candidate remains held until the gates below are met.
 
-- [x] Import existing configs from every supported client without exposing credential values.
-- [x] Preview and apply a no-op sync twice; the second run produces no change.
-- [x] Add and remove one stdio and one network server per writable target.
-- [x] Confirm unrelated JSON and TOML keys and comments survive round trips.
-- [x] Interrupt or force a failed write and restore from `.mcp-manager-backup`.
-- [x] Exercise missing commands, missing environment variables, timeouts, malformed configs, and unavailable servers.
-- [x] Run the public Action against one valid config and one intentionally invalid config.
-- [x] Install with pip, pipx, and uv from the release-candidate artifact.
-- [x] Complete one smoke pass on Linux, macOS, and Windows.
-- [x] Confirm there are no unresolved P0/P1 defects or undocumented data-loss paths.
+### Automated and isolated qualification
 
-### v1.0.0 evidence — 2026-09-03
+Run these against the final candidate and retain the corresponding CI run or
+local receipt. They establish tested behavior, not installed-client acceptance:
 
-The evidence applies to the release-candidate head of
-[PR #20](https://github.com/AreteDriver/mcp-manager/pull/20). The pull request's
-exact-commit checks are the authoritative hosted record.
+- Run the complete quality/security contract above and all nine OS/Python jobs.
+- Run `scripts/rc_dogfood.py --wheel PATH_TO_CANDIDATE_WHEEL`: five native format
+  round trips, repeat-write idempotence, unrelated-field preservation, backup
+  restoration, forced-write cleanup and fresh-wheel CLI smoke.
+- Exercise CLI import, preview, sync, health, remove and recovery using isolated
+  temporary HOME/project directories and benign local protocol servers.
+- Run the public Action against valid and invalid configurations.
+- Install the final artifact with pip, pipx and uv; inspect its version and
+  import path. Test upgrade from the preceding published version and recovery
+  without editing the operator's real configuration.
+- Record security scan results and reproduce any unresolved high-severity issue.
 
-- Existing Codex, Claude Code, and Claude Desktop configuration was imported
-  read-only on macOS. Output was reviewed for structure and diagnostics only;
-  credential values were not recorded. Cursor and Windsurf were not installed
-  on that workstation, so no nonexistent user configuration was fabricated.
-- `scripts/rc_dogfood.py` exercises all five native target formats in isolated
-  temporary directories. It previews, applies, repeats, parses, removes,
-  preserves unrelated data, restores a backup byte-for-byte, and verifies that
-  a forced atomic-replacement failure retains the original and cleans its
-  temporary file.
-- The test suite covers missing commands and environment variables, network and
-  subprocess timeouts, malformed configuration, and unavailable servers. The
-  public Action workflow covers both valid and intentionally invalid input.
-- The candidate wheel was installed and invoked in fresh pip, pipx, and uv tool
-  environments. The package matrix repeats the wheel test on hosted Linux,
-  macOS, and Windows runners.
-- The local candidate suite passed 627 tests at 88.08% coverage, together with
-  Ruff, format, strict mypy, strict MkDocs, Bandit, dependency audit, package
-  metadata, and source-archive checks. GitHub reported no open issues when the
-  candidate was signed off.
+### Installed-client acceptance — still required
+
+A rendered configuration and an SDK session are different evidence from a
+client loading that configuration and using its tools. Record actual client
+versions and supported transports/scopes. Use an isolated profile or approved
+project with a benign test server; preserve the original config and stop on
+unexpected changes. Do not copy credentials into evidence.
+
+| Client | Candidate format coverage | Final-candidate client loads config and calls a tool |
+|--------|---------------------------|----------------------------------------------------|
+| Codex | Automated TOML fixtures | Pending |
+| Claude Code | Automated JSON fixtures | Pending |
+| Claude Desktop | Automated JSON fixtures | Pending |
+| Cursor | Automated JSON fixtures | Pending |
+| Windsurf | Automated JSON fixtures | Pending |
+
+For each claimed target, preview/apply the change, invoke a harmless tool from
+that client, repeat sync without changes, remove the test server and restore
+the baseline. Confirm unrelated settings survive and failure recovery works.
+Unsupported or unavailable combinations stay explicitly unverified; narrow
+release claims if they cannot be demonstrated. A passing CI matrix is not a
+claim that all five GUI/CLI clients were exercised on every OS.
+
+### Release decision
+
+- [ ] Final integrated commit has passing required hosted checks.
+- [ ] Installed-client acceptance above is recorded, or support claims are explicitly narrowed.
+- [ ] Required review is satisfied under an explicitly agreed repository policy.
+- [ ] No unresolved release-blocking safety defect remains.
+- [ ] Protected release publishes the approved tag and matching PyPI/GitHub artifacts.
+- [ ] Downloaded artifacts match release checksums; install/upgrade and hosted documentation are verified.
+
+The local static review agent is advisory and does not create a separate GitHub
+approving identity. Its result does not authorize policy changes or publication.
+
+### Historical evidence — not final-candidate sign-off
+
+On September 3, 2026, existing Codex, Claude Code and Claude Desktop configs
+were imported read-only on macOS. Cursor and Windsurf were not installed.
+Five-format temporary fixtures, fresh pip/pipx/uv installs and 627 tests at
+88.08% coverage were recorded then; these were not live acceptance of all clients.
+
+PR #20 at `6fd5c0af08efc82f2254f5655c2eb3efc5ea2ae2` subsequently recorded
+697 tests and 88.56% coverage, with successful hosted matrix checks and
+fresh-wheel format fixtures. That evidence belongs to the parent candidate,
+not automatically to this integrated branch. See the exact-commit Actions runs
+and the integration PR for subsequent validation receipts.
 
 ## Rollback
 
@@ -92,7 +126,7 @@ environments have a normal upgrade path.
 
 ## Support and compatibility
 
-The latest 1.x release receives security and compatibility fixes. Translation
+After publication, the latest 1.x release will receive security and compatibility fixes. Translation
 loss is surfaced as a warning, and unsupported transports are rejected. Changes
 to documented output schemas or config semantics require SemVer treatment and
 migration notes.

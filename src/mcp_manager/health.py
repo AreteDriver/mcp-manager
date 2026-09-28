@@ -31,6 +31,7 @@ from mcp_manager.protocol import (
 )
 
 logger = logging.getLogger(__name__)
+MAX_TOOL_PAGES = 100
 
 
 def _rpc_result(body: Any, request_id: int) -> dict[str, Any]:
@@ -48,8 +49,8 @@ def _rpc_result(body: Any, request_id: int) -> dict[str, Any]:
     return result
 
 
-def _listed_tools(body: Any) -> list[Any]:
-    tools = _rpc_result(body, 3).get("tools")
+def _listed_tools(body: Any, request_id: int = 3) -> list[Any]:
+    tools = _rpc_result(body, request_id).get("tools")
     if not isinstance(tools, list) or any(
         not isinstance(tool, dict) or not isinstance(tool.get("name"), str) for tool in tools
     ):
@@ -60,6 +61,23 @@ def _listed_tools(body: Any) -> list[Any]:
     except ValidationError:
         raise ProtocolError("Invalid tools/list schema") from None
     return tools
+
+
+def _add_tool_name(name: str, names: set[str]) -> None:
+    """A complete listing must identify each callable tool unambiguously."""
+    if not name or name in names:
+        raise ProtocolError("Invalid or duplicate tool name")
+    names.add(name)
+
+
+def _next_tool_cursor(cursor: Any, seen: set[str]) -> str | None:
+    """Reject cyclic or malformed pagination without reporting a partial count."""
+    if cursor is None:
+        return None
+    if not isinstance(cursor, str) or cursor in seen:
+        raise ProtocolError("Invalid tools/list pagination")
+    seen.add(cursor)
+    return cursor
 
 
 def _initialize_info(body: Any) -> dict[str, Any]:
@@ -329,11 +347,23 @@ class HealthChecker:
                         raise ProtocolError("Invalid server metadata")
                     status = ServerStatus.HEALTHY
                     error = None
+                    tool_count: int | None = None
                     if self._deep:
-                        listed = await client.list_tools(cache_mode="refresh")
-                        for tool in listed.tools:
-                            Tool.model_validate(tool.model_dump(by_alias=True))
-                        if not listed.tools:
+                        names: set[str] = set()
+                        seen: set[str] = set()
+                        cursor = None
+                        for _ in range(MAX_TOOL_PAGES):
+                            listed = await client.list_tools(cursor=cursor, cache_mode="refresh")
+                            for tool in listed.tools:
+                                Tool.model_validate(tool.model_dump(by_alias=True))
+                                _add_tool_name(tool.name, names)
+                            cursor = _next_tool_cursor(listed.next_cursor, seen)
+                            if cursor is None:
+                                break
+                        else:
+                            raise ProtocolError("Too many tools/list pages")
+                        tool_count = len(names)
+                        if tool_count == 0:
                             status = ServerStatus.DEGRADED
                             error = "Server returned zero tools"
                     return HealthResult(
@@ -349,6 +379,7 @@ class HealthChecker:
                             "capabilities": client.server_capabilities.model_dump(
                                 by_alias=True, exclude_none=True
                             ),
+                            **({"tool_count": tool_count} if tool_count is not None else {}),
                         },
                         error_message=error,
                     )
@@ -389,30 +420,37 @@ class HealthChecker:
             assert proc.stdin is not None
             assert proc.stdout is not None
 
-            proc.stdin.write(build_list_tools_request())
-            await proc.stdin.drain()
-            tools_data = await _read_stdio_response(proc.stdout)
-
-            if not tools_data:
-                return HealthResult(
-                    server_name=server.name,
-                    status=ServerStatus.DEGRADED,
-                    transport=TransportType.STDIO,
-                    latency_ms=prev.latency_ms,
-                    error_message="No tools/list response",
-                )
-
+            names: set[str] = set()
+            seen: set[str] = set()
+            cursor = None
             try:
-                parsed = parse_jsonrpc_response(tools_data)
-                tools = _listed_tools(parsed)
-                if not tools:
-                    return HealthResult(
-                        server_name=server.name,
-                        status=ServerStatus.DEGRADED,
-                        transport=TransportType.STDIO,
-                        latency_ms=prev.latency_ms,
-                        error_message="Server returned zero tools",
+                for page in range(MAX_TOOL_PAGES):
+                    request_id = 3 + page
+                    request = json.loads(build_list_tools_request(request_id=request_id))
+                    if cursor is not None:
+                        request["params"] = {"cursor": cursor}
+                    proc.stdin.write(json.dumps(request).encode("utf-8") + b"\n")
+                    await proc.stdin.drain()
+                    tools_data = await _read_stdio_response(proc.stdout)
+                    if not tools_data:
+                        return HealthResult(
+                            server_name=server.name,
+                            status=ServerStatus.DEGRADED,
+                            transport=TransportType.STDIO,
+                            latency_ms=prev.latency_ms,
+                            error_message="No tools/list response",
+                        )
+                    parsed = parse_jsonrpc_response(tools_data)
+                    tools = _listed_tools(parsed, request_id=request_id)
+                    for tool in tools:
+                        _add_tool_name(tool["name"], names)
+                    cursor = _next_tool_cursor(
+                        _rpc_result(parsed, request_id).get("nextCursor"), seen
                     )
+                    if cursor is None:
+                        break
+                else:
+                    raise ProtocolError("Too many tools/list pages")
             except (ProtocolError, KeyError, TypeError):
                 return HealthResult(
                     server_name=server.name,
@@ -422,7 +460,13 @@ class HealthChecker:
                     error_message="Invalid tools/list response",
                 )
 
-            return prev
+            return prev.model_copy(
+                update={
+                    "status": prev.status if names else ServerStatus.DEGRADED,
+                    "server_info": {**prev.server_info, "tool_count": len(names)},
+                    "error_message": prev.error_message if names else "Server returned zero tools",
+                }
+            )
 
         try:
             return await asyncio.wait_for(_deep_tools_check(), timeout=self._timeout)

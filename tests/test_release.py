@@ -155,6 +155,36 @@ class TestWorkflowYaml:
         assert "Create GitHub Release" in names
         assert "Publish to PyPI" in names
 
+    def test_integrity_assets_are_not_pypi_distribution_inputs(self, tmp_path: Path) -> None:
+        workflow = Path(__file__).parent.parent / ".github" / "workflows" / "release.yml"
+        steps = yaml.safe_load(workflow.read_text())["jobs"]["release"]["steps"]
+        publish = next(s for s in steps if s.get("name") == "Publish to PyPI")
+        attach = next(s for s in steps if s.get("name") == "Create GitHub Release")
+        integrity = next(
+            s for s in steps if s.get("name") == "Generate release integrity artifacts"
+        )
+        # Model the publisher's wildcard expansion, including GitHub release attachments.
+        for directory, files in {
+            "dist": ["arete_mcp-1.0.0-py3-none-any.whl", "arete_mcp-1.0.0.tar.gz"],
+            "release-assets": ["arete-mcp-sbom.json", "SHA256SUMS"],
+        }.items():
+            (tmp_path / directory).mkdir()
+            for filename in files:
+                (tmp_path / directory / filename).write_text("fixture")
+        package_dir = publish.get("with", {}).get("packages-dir", "dist/")
+        uploaded = list((tmp_path / package_dir).glob("*"))
+        assert len(uploaded) == 2
+        assert all(p.name.endswith((".whl", ".tar.gz")) for p in uploaded)
+        attachments = {
+            p.name
+            for pattern in attach["with"]["files"].splitlines()
+            for p in tmp_path.glob(pattern)
+        }
+        assert attachments == {p.name for p in uploaded} | {"arete-mcp-sbom.json", "SHA256SUMS"}
+        assert "--output release-assets/arete-mcp-sbom.json" in integrity["run"]
+        assert "(cd dist && sha256sum *.whl *.tar.gz)" in integrity["run"]
+        assert "(cd release-assets && sha256sum arete-mcp-sbom.json)" in integrity["run"]
+
     def test_validate_action_provisions_pinned_uv(self) -> None:
         action = (
             Path(__file__).parent.parent

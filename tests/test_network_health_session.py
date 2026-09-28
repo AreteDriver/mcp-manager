@@ -17,7 +17,7 @@ INFO = {
 TOOLS = [{"name": "fixture", "inputSchema": {"type": "object"}}]
 
 
-async def check_session(*, init=INFO, tools=TOOLS, failure=None, deep=True):
+async def check_session(*, init=INFO, tools=TOOLS, failure=None, deep=True, pages=None):
     calls = []
 
     def handler(request):
@@ -56,6 +56,8 @@ async def check_session(*, init=INFO, tools=TOOLS, failure=None, deep=True):
                 },
             )
         result = {"tools": tools} if method == "tools/list" else {}
+        if method == "tools/list" and pages is not None:
+            result = pages[body.get("params", {}).get("cursor")]
         return httpx2.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": result})
 
     original = httpx2.AsyncClient
@@ -82,6 +84,7 @@ async def test_stateful_http_session_handshake_ping_and_tools():
         "server_name": "fixture",
         "server_version": "1",
         "capabilities": {"tools": {}},
+        "tool_count": 1,
     }
     assert calls == [
         "server/discover",
@@ -129,6 +132,7 @@ async def test_shallow_check_negotiates_and_pings_without_listing():
     result, calls = await check_session(deep=False)
     assert result.status is ServerStatus.HEALTHY
     assert "ping" in calls and "tools/list" not in calls
+    assert "tool_count" not in result.server_info
 
 
 @pytest.mark.parametrize("invalid", [False, True, "payload", "endpoint"])
@@ -194,3 +198,47 @@ async def test_sse_uses_negotiated_message_endpoint_and_closes_stream(invalid, c
     assert "synthetic-secret" not in caplog.text
     if not invalid:
         assert calls == ["initialize", "notifications/initialized", "ping", "tools/list"]
+
+
+async def test_network_count_includes_all_validated_pages():
+    result, calls = await check_session(
+        pages={
+            None: {"tools": TOOLS, "nextCursor": "second"},
+            "second": {"tools": [{"name": "other", "inputSchema": {"type": "object"}}]},
+        }
+    )
+    assert result.status is ServerStatus.HEALTHY
+    assert result.server_info["tool_count"] == 2
+    assert calls.count("tools/list") == 2
+
+
+@pytest.mark.parametrize(
+    "second",
+    [
+        {"tools": TOOLS, "nextCursor": "second"},
+        {"tools": [{"name": "invalid"}]},
+        {"tools": [{"name": "", "inputSchema": {"type": "object"}}]},
+        {"tools": TOOLS},
+    ],
+)
+async def test_incomplete_network_listing_has_no_partial_count(second):
+    result, _ = await check_session(
+        pages={
+            None: {"tools": TOOLS, "nextCursor": "second"},
+            "second": second,
+        }
+    )
+    assert result.status is not ServerStatus.HEALTHY
+    assert "tool_count" not in result.server_info
+
+
+async def test_network_pagination_budget_has_no_partial_count():
+    with patch("mcp_manager.health.MAX_TOOL_PAGES", 1):
+        result, calls = await check_session(
+            pages={
+                None: {"tools": TOOLS, "nextCursor": "second"},
+            }
+        )
+    assert result.status is not ServerStatus.HEALTHY
+    assert "tool_count" not in result.server_info
+    assert calls.count("tools/list") == 1
