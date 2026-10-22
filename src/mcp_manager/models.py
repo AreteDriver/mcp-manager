@@ -107,6 +107,23 @@ class HealthResult(BaseModel):
     checked_at: float = Field(default_factory=time.time)
 
 
+class ProtocolProbeResult(BaseModel):
+    """Result of a dual-era MCP compatibility probe."""
+
+    server_name: str
+    transport: TransportType
+    protocol_era: Literal["modern", "legacy"]
+    protocol_version: str
+    latency_ms: float
+    server_info: dict[str, Any] = Field(default_factory=dict)
+    capabilities: dict[str, Any] = Field(default_factory=dict)
+    tools: list[str] = Field(default_factory=list)
+    list_ttl_ms: int | None = None
+    list_cache_scope: Literal["public", "private"] | None = None
+    cached_repeat_identical: bool = False
+    tool_call_result: dict[str, Any] | None = None
+
+
 class ServerMapping(BaseModel):
     """Mapping of a server to the IDEs/tools that reference it."""
 

@@ -45,6 +45,7 @@ nav:
   - Quickstart: quickstart.md
   - Configuration: configuration.md
   - Authentication: authentication.md
+  - Protocol Compatibility: protocol-compatibility.md
   - Marketplace: marketplace.md
   - Team Features: team.md
   - Client Targets: ide-support.md
@@ -54,6 +55,7 @@ nav:
       - Registry Durability: design/registry-durability.md
       - Marketplace Spec: design/spec-p5-marketplace.md
   - Historical Plans:
+      - Sprint 0 Agent Ops: plan/sprint-0-agent-ops.md
       - v0.5 Team Adoption: plan/v0.5.0-team-adoption.md
   - Contributing: contributing.md
   - Changelog: changelog.md

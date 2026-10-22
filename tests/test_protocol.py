@@ -8,6 +8,7 @@ import pytest
 
 from mcp_manager.exceptions import ProtocolError
 from mcp_manager.protocol import (
+    build_discover_request,
     build_initialize_request,
     build_initialized_notification,
     build_list_tools_request,
@@ -25,6 +26,7 @@ class TestBuildInitializeRequest:
         assert data["method"] == "initialize"
         assert "params" in data
         assert "clientInfo" in data["params"]
+        assert data["params"]["protocolVersion"] == "2024-11-05"
 
     def test_custom_id(self) -> None:
         data = json.loads(build_initialize_request(request_id=42))
@@ -55,6 +57,16 @@ class TestBuildListToolsRequest:
         data = json.loads(build_list_tools_request())
         assert data["method"] == "tools/list"
         assert data["id"] == 3
+
+
+class TestBuildDiscoverRequest:
+    def test_is_self_describing(self) -> None:
+        data = build_discover_request()
+        meta = data["params"]["_meta"]
+        assert data["method"] == "server/discover"
+        assert meta["io.modelcontextprotocol/protocolVersion"] == "2026-07-28"
+        assert meta["io.modelcontextprotocol/clientInfo"]["name"] == "mcp-manager"
+        assert meta["io.modelcontextprotocol/clientCapabilities"] == {}
 
 
 class TestParseJsonrpcResponse:

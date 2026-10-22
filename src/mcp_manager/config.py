@@ -64,6 +64,7 @@ HEALTH_TIMEOUT_SECONDS: int = 10
 # ---------------------------------------------------------------------------
 # MCP protocol.
 # ---------------------------------------------------------------------------
-MCP_PROTOCOL_VERSION: str = "2024-11-05"
+MCP_PROTOCOL_VERSION: str = "2026-07-28"
+MCP_LEGACY_PROTOCOL_VERSION: str = "2024-11-05"
 MCP_CLIENT_NAME: str = "mcp-manager"
 MCP_CLIENT_VERSION: str = __version__
