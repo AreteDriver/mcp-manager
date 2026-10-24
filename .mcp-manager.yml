@@ -4,7 +4,7 @@ project: my-project
 servers:
   filesystem:
     command: npx
-    args: ["-y", "@modelcontextprotocol/server-filesystem"]
+    args: ["-y", "@modelcontextprotocol/server-filesystem@2026.8.31"]
     env: {}
     tags: [core, filesystem]
 
