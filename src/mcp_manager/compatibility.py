@@ -10,6 +10,7 @@ from typing import Any
 
 import httpx2
 from mcp.client import Client
+from mcp.client.sse import sse_client
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import Implementation
@@ -17,6 +18,7 @@ from mcp.types import Implementation
 from mcp_manager.config import MCP_CLIENT_NAME, MCP_CLIENT_VERSION, MCP_PROTOCOL_VERSION
 from mcp_manager.exceptions import ProtocolError
 from mcp_manager.models import McpServer, NetworkConfig, ProtocolProbeResult, TransportType
+from mcp_manager.session_logging import private_session_logs
 
 
 def _http_headers(network_cfg: NetworkConfig) -> dict[str, str]:
@@ -48,6 +50,16 @@ def _http_headers(network_cfg: NetworkConfig) -> dict[str, str]:
 
 @asynccontextmanager
 async def _open_client(
+    server: McpServer, *, timeout: float, mode: str = "auto"
+) -> AsyncIterator[Client]:
+    """Keep third-party diagnostics from exposing credentials or server payloads."""
+    with private_session_logs():
+        async with _open_transport_client(server, timeout=timeout, mode=mode) as client:
+            yield client
+
+
+@asynccontextmanager
+async def _open_transport_client(
     server: McpServer,
     *,
     timeout: float,
@@ -77,6 +89,23 @@ async def _open_client(
                 client_info=client_info,
             ) as client:
                 yield client
+        return
+
+    if server.transport == TransportType.SSE:
+        if server.network_config is None:
+            raise ProtocolError("No SSE config")
+        async with Client(
+            sse_client(
+                server.network_config.url,
+                headers=_http_headers(server.network_config),
+                timeout=timeout,
+                sse_read_timeout=timeout,
+            ),
+            mode="legacy",
+            read_timeout_seconds=timeout,
+            client_info=client_info,
+        ) as client:
+            yield client
         return
 
     if server.transport == TransportType.HTTP:

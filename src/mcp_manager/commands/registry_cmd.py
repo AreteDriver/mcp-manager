@@ -36,7 +36,7 @@ def _build_headers(
     if header:
         for h in header:
             if ":" not in h:
-                raise ValueError(f"Invalid header format (expected 'Key:Value'): {h}")
+                raise ValueError("Invalid header format (expected 'Key:Value')")
             key, value = h.split(":", 1)
             cli_headers[key.strip()] = value.strip()
 
@@ -83,7 +83,7 @@ def registry_diff(
         raise typer.Exit(1)
 
     try:
-        local = load_servers_from_config(config_path)
+        local = load_servers_from_config(config_path, resolve_env=False, strict=True)
     except McpManagerError as exc:
         console.print(f"[red]Failed to load local config:[/red] {exc}")
         raise typer.Exit(1) from exc
@@ -106,7 +106,7 @@ def registry_diff(
         console.print("[dim]No changes — local config matches remote registry.[/dim]")
         return
 
-    table = Table(title=f"Registry Diff: {url}")
+    table = Table(title="Registry Diff")
     table.add_column("Action", style="bold")
     table.add_column("Server", style="cyan")
     table.add_column("Transport")
@@ -161,7 +161,7 @@ def registry_pull(
         raise typer.Exit(1)
 
     try:
-        local = load_servers_from_config(config_path)
+        local = load_servers_from_config(config_path, resolve_env=False, strict=True)
     except McpManagerError as exc:
         console.print(f"[red]Failed to load local config:[/red] {exc}")
         raise typer.Exit(1) from exc
@@ -180,12 +180,12 @@ def registry_pull(
 
     if verify:
         console.print("[dim]Verifying remote servers...[/dim]")
-        results = verify_servers(remote)
-        failed = [
-            (s, status, err)
-            for s, status, err in results
-            if status in (ServerStatus.ERROR, ServerStatus.UNREACHABLE)
-        ]
+        try:
+            results = verify_servers(remote)
+        except McpManagerError as exc:
+            console.print(f"[red]Verification failed:[/red] {exc}")
+            raise typer.Exit(1) from exc
+        failed = [(s, status, err) for s, status, err in results if status != ServerStatus.HEALTHY]
         if failed:
             table = Table(title="Verification Failed")
             table.add_column("Server", style="cyan")

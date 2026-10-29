@@ -182,7 +182,12 @@ def marketplace_refresh_impl(
 
     track_command("marketplace-refresh")
     try:
-        updated = refresh_marketplace(output, timeout=timeout, dry_run=dry_run)
+        updated = refresh_marketplace(
+            output,
+            timeout=timeout,
+            dry_run=dry_run,
+            progress=lambda message: console.print(f"[dim]{message}[/dim]"),
+        )
     except MarketplaceError as exc:
         console.print(f"[red]Refresh error:[/red] {exc}")
         raise

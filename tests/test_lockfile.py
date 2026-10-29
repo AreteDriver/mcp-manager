@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
+import httpx
 import pytest
 import yaml
 
@@ -24,11 +24,6 @@ from mcp_manager.models import McpServer, StdioConfig, TransportType
 # ---------------------------------------------------------------------------
 # resolve_server / npm extraction
 # ---------------------------------------------------------------------------
-
-
-def _make_registry_response(version: str) -> bytes:
-    """Return mocked npm registry JSON bytes."""
-    return json.dumps({"dist-tags": {"latest": version}}).encode("utf-8")
 
 
 def test_resolve_server_npm_explicit_version() -> None:
@@ -50,11 +45,9 @@ def test_resolve_server_npm_no_version() -> None:
         transport=TransportType.STDIO,
         stdio_config=StdioConfig(command="npx", args=["some-pkg"]),
     )
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        mock_response = MagicMock()
-        mock_response.read.return_value = _make_registry_response("4.5.6")
-        mock_response.__enter__.return_value = mock_response
-        mock_urlopen.return_value = mock_response
+    with patch("mcp_manager.lockfile.httpx.get") as mock_get:
+        mock_get.return_value.json.return_value = {"dist-tags": {"latest": "4.5.6"}}
+        mock_get.return_value.raise_for_status.return_value = None
 
         entry = resolve_server(server)
 
@@ -81,9 +74,7 @@ def test_resolve_server_npm_registry_failure() -> None:
         transport=TransportType.STDIO,
         stdio_config=StdioConfig(command="npx", args=["some-pkg"]),
     )
-    from urllib.error import URLError
-
-    with patch("urllib.request.urlopen", side_effect=URLError("network down")):
+    with patch("mcp_manager.lockfile.httpx.get", side_effect=httpx.ConnectError("network down")):
         entry = resolve_server(server)
     assert entry.resolved_version is None
     assert entry.error is not None

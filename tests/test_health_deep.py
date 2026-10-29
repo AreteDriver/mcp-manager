@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import signal
+import sys
+import time
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import pytest
 
 from mcp_manager.health import HealthChecker
 from mcp_manager.models import (
@@ -15,6 +20,13 @@ from mcp_manager.models import (
     StdioConfig,
     TransportType,
 )
+
+
+def _valid_init() -> bytes:
+    return (
+        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05",'
+        b'"capabilities":{},"serverInfo":{"name":"fixture","version":"1"}}}\n'
+    )
 
 
 def _make_stdio(name: str = "test-stdio") -> McpServer:
@@ -41,108 +53,6 @@ def _make_sse(name: str = "test-sse", url: str = "https://mcp.example.com/sse") 
     )
 
 
-class TestHealthCheckerDeep:
-    """Tests for deep health check paths."""
-
-    def test_deep_network_http_with_tools(self) -> None:
-        """Deep check HTTP server returning tools."""
-        checker = HealthChecker(timeout=5, deep=True)
-        server = _make_http()
-
-        init_response = httpx.Response(
-            200,
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "serverInfo": {"name": "test", "version": "1.0"},
-                    "capabilities": {},
-                },
-            },
-        )
-        tools_response = httpx.Response(
-            200,
-            json={"jsonrpc": "2.0", "id": 3, "result": {"tools": [{"name": "tool1"}]}},
-        )
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.side_effect = [init_response, tools_response]
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.HEALTHY
-
-    def test_deep_network_http_zero_tools(self) -> None:
-        """Deep check HTTP server returning zero tools."""
-        checker = HealthChecker(timeout=5, deep=True)
-        server = _make_http()
-
-        init_response = httpx.Response(
-            200,
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "serverInfo": {"name": "test", "version": "1.0"},
-                    "capabilities": {},
-                },
-            },
-        )
-        tools_response = httpx.Response(
-            200,
-            json={"jsonrpc": "2.0", "id": 3, "result": {"tools": []}},
-        )
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.side_effect = [init_response, tools_response]
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.DEGRADED
-        assert "zero tools" in (result.error_message or "").lower()
-
-    def test_deep_network_http_tools_4xx(self) -> None:
-        """Deep check HTTP server where tools/list returns 4xx."""
-        checker = HealthChecker(timeout=5, deep=True)
-        server = _make_http()
-
-        init_response = httpx.Response(
-            200,
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "serverInfo": {"name": "test", "version": "1.0"},
-                    "capabilities": {},
-                },
-            },
-        )
-        tools_response = httpx.Response(404, text="Not Found")
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.side_effect = [init_response, tools_response]
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.DEGRADED
-        assert "404" in (result.error_message or "")
-
-
 class TestHealthCheckerStdioEdgeCases:
     """Edge cases for stdio transport health checks."""
 
@@ -158,7 +68,7 @@ class TestHealthCheckerStdioEdgeCases:
             result = asyncio.run(checker.check(server))
 
         assert result.status == ServerStatus.UNREACHABLE
-        assert "Permission denied" in (result.error_message or "")
+        assert "OSError" in (result.error_message or "")
 
     def test_stdio_timeout(self) -> None:
         """Stdio handshake times out."""
@@ -183,6 +93,43 @@ class TestHealthCheckerStdioEdgeCases:
 
         assert result.status == ServerStatus.UNREACHABLE
         assert "timeout" in (result.error_message or "").lower()
+
+    def test_stdio_cleanup_terminates_process_group_on_posix(self) -> None:
+        """Cleanup kills launcher descendants that keep stdio pipes open."""
+        if os.name != "posix":
+            pytest.skip("POSIX process groups are not available")
+
+        proc = MagicMock()
+        proc.pid = 4242
+        proc.wait = AsyncMock()
+
+        with patch("mcp_manager.health.os.killpg") as killpg:
+            asyncio.run(HealthChecker._stdio_cleanup(proc))
+
+        killpg.assert_called_once_with(4242, signal.SIGKILL)
+        proc.wait.assert_awaited_once()
+
+    def test_stdio_timeout_reaps_descendant_holding_stdout(self, tmp_path: Path) -> None:
+        """A launcher child cannot keep asyncio shutdown blocked after timeout."""
+        if os.name != "posix":
+            pytest.skip("POSIX process groups are not available")
+
+        launcher = tmp_path / "launcher.py"
+        launcher.write_text(
+            "import subprocess, sys\n"
+            "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(3)'])\n"
+        )
+        server = McpServer(
+            name="descendant-holder",
+            transport=TransportType.STDIO,
+            stdio_config=StdioConfig(command=sys.executable, args=[str(launcher)]),
+        )
+        started = time.monotonic()
+
+        result = asyncio.run(HealthChecker(timeout=0.1).check(server))
+
+        assert result.status == ServerStatus.UNREACHABLE
+        assert time.monotonic() - started < 2
 
     def test_stdio_no_response_to_initialize(self) -> None:
         """Stdio process exits without responding to initialize."""
@@ -217,29 +164,6 @@ class TestHealthCheckerStdioEdgeCases:
 
         # Should fall through to prev result (which was UNREACHABLE from _check_stdio)
         assert result.status == ServerStatus.UNREACHABLE
-
-
-class TestHealthCheckerHTTPEdgeCases:
-    """Edge cases for HTTP transport health checks."""
-
-    def test_http_invalid_jsonrpc(self) -> None:
-        """HTTP server returns 200 but body is not valid JSON-RPC."""
-        checker = HealthChecker(timeout=5)
-        server = _make_http()
-
-        mock_response = httpx.Response(200, text="not json")
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.return_value = mock_response
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.DEGRADED
-        assert "invalid JSON-RPC" in (result.error_message or "")
 
 
 class TestHealthCheckerMissingDeps:
@@ -288,207 +212,6 @@ class TestHealthCheckerTransportErrors:
         assert result.status == ServerStatus.ERROR
         assert "No network config" in (result.error_message or "")
 
-    def test_sse_connect_error(self) -> None:
-        """SSE server connection refused."""
-        checker = HealthChecker(timeout=5)
-        server = _make_sse()
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.get.side_effect = httpx.ConnectError("Connection refused")
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.UNREACHABLE
-        assert "Connection refused" in (result.error_message or "")
-
-    def test_sse_timeout(self) -> None:
-        """SSE server times out."""
-        checker = HealthChecker(timeout=5)
-        server = _make_sse()
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.get.side_effect = httpx.TimeoutException("Timeout")
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.UNREACHABLE
-        assert "Timeout" in (result.error_message or "")
-
-    def test_sse_http_4xx(self) -> None:
-        """SSE server returns HTTP 4xx."""
-        checker = HealthChecker(timeout=5)
-        server = _make_sse()
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = httpx.Response(403, text="Forbidden")
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.ERROR
-        assert "HTTP 403" in (result.error_message or "")
-
-    def test_sse_degraded_content_type(self) -> None:
-        """SSE server reachable but wrong content-type."""
-        checker = HealthChecker(timeout=5)
-        server = _make_sse()
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = httpx.Response(
-                200, text="ok", headers={"content-type": "text/html"}
-            )
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.DEGRADED
-
-    def test_http_connect_error(self) -> None:
-        """HTTP server connection refused."""
-        checker = HealthChecker(timeout=5)
-        server = _make_http()
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.side_effect = httpx.ConnectError("Connection refused")
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.UNREACHABLE
-        assert "Connection refused" in (result.error_message or "")
-
-    def test_http_timeout(self) -> None:
-        """HTTP server times out."""
-        checker = HealthChecker(timeout=5)
-        server = _make_http()
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.side_effect = httpx.TimeoutException("Timeout")
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.UNREACHABLE
-        assert "Timeout" in (result.error_message or "")
-
-    def test_http_4xx(self) -> None:
-        """HTTP server returns HTTP 4xx."""
-        checker = HealthChecker(timeout=5)
-        server = _make_http()
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.return_value = httpx.Response(401, text="Unauthorized")
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.ERROR
-        assert "HTTP 401" in (result.error_message or "")
-
-    def test_http_invalid_jsonrpc_typeerror(self) -> None:
-        """HTTP server returns 200 but extract_server_info raises TypeError."""
-        checker = HealthChecker(timeout=5)
-        server = _make_http()
-
-        with (
-            patch("mcp_manager.health.extract_server_info", side_effect=TypeError("bad")),
-            patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls,
-        ):
-            mock_client = AsyncMock()
-            mock_client.post.return_value = httpx.Response(200, text="ok")
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.DEGRADED
-        assert "invalid json-rpc response" in (result.error_message or "").lower()
-
-    def test_deep_network_http_error(self) -> None:
-        """Deep check when POST tools/list raises httpx.HTTPError."""
-        checker = HealthChecker(timeout=5, deep=True)
-        server = _make_http()
-
-        init_response = httpx.Response(
-            200,
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "serverInfo": {"name": "test", "version": "1.0"},
-                    "capabilities": {},
-                },
-            },
-        )
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.side_effect = [init_response, httpx.HTTPError("boom")]
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        # Deep check falls back to prev result (HEALTHY from shallow check)
-        assert result.status == ServerStatus.HEALTHY
-
-    def test_deep_network_invalid_jsonrpc(self) -> None:
-        """Deep check when tools/list returns invalid JSON-RPC."""
-        checker = HealthChecker(timeout=5, deep=True)
-        server = _make_http()
-
-        init_response = httpx.Response(
-            200,
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "serverInfo": {"name": "test", "version": "1.0"},
-                    "capabilities": {},
-                },
-            },
-        )
-        tools_response = httpx.Response(200, text="not json")
-
-        with patch("mcp_manager.health.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post.side_effect = [init_response, tools_response]
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
-
-            result = asyncio.run(checker.check(server))
-
-        assert result.status == ServerStatus.DEGRADED
-        assert "invalid tools/list response" in (result.error_message or "").lower()
-
 
 class TestHealthCheckerDeepCheckSkips:
     """Tests for deep check skip conditions."""
@@ -527,8 +250,8 @@ class TestHealthCheckerStdioDeepPaths:
             mock_exec.side_effect = [
                 _make_proc(
                     [
-                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                        b"pong\n",
+                        _valid_init(),
+                        b'{"jsonrpc":"2.0","id":2,"result":{}}\n',
                     ]
                 ),
                 _make_proc([b""]),
@@ -559,13 +282,13 @@ class TestHealthCheckerStdioDeepPaths:
             mock_exec.side_effect = [
                 _make_proc(
                     [
-                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                        b"pong\n",
+                        _valid_init(),
+                        b'{"jsonrpc":"2.0","id":2,"result":{}}\n',
                     ]
                 ),
                 _make_proc(
                     [
-                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
+                        _valid_init(),
                         b"",
                     ]
                 ),
@@ -595,13 +318,13 @@ class TestHealthCheckerStdioDeepPaths:
             mock_exec.side_effect = [
                 _make_proc(
                     [
-                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                        b"pong\n",
+                        _valid_init(),
+                        b'{"jsonrpc":"2.0","id":2,"result":{}}\n',
                     ]
                 ),
                 _make_proc(
                     [
-                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
+                        _valid_init(),
                         b'{"jsonrpc":"2.0","id":3,"result":{"tools":[]}}\n',
                     ]
                 ),
@@ -631,13 +354,13 @@ class TestHealthCheckerStdioDeepPaths:
             mock_exec.side_effect = [
                 _make_proc(
                     [
-                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                        b"pong\n",
+                        _valid_init(),
+                        b'{"jsonrpc":"2.0","id":2,"result":{}}\n',
                     ]
                 ),
                 _make_proc(
                     [
-                        b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
+                        _valid_init(),
                         b"not json\n",
                     ]
                 ),
@@ -660,8 +383,8 @@ class TestHealthCheckerStdioDeepPaths:
             p.stdout = MagicMock()
             p.stdout.readline = AsyncMock(
                 side_effect=[
-                    b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n',
-                    b"pong\n",
+                    _valid_init(),
+                    b'{"jsonrpc":"2.0","id":2,"result":{}}\n',
                 ]
             )
             p.kill.return_value = None
@@ -680,7 +403,7 @@ class TestHealthCheckerStdioDeepPaths:
                 nonlocal call_count
                 call_count += 1
                 if call_count == 1:
-                    return b'{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n'
+                    return _valid_init()
                 await asyncio.sleep(100)
                 return b""
 

@@ -14,10 +14,10 @@ from mcp_manager.models import McpServer, TransportType
 _KNOWN_DEPS: dict[str, list[str]] = {
     "node": ["node"],
     "npx": ["npx"],
-    "python": ["python3", "python"],
-    "python3": ["python3", "python"],
+    "python": ["python"],
+    "python3": ["python3"],
     "docker": ["docker"],
-    "uvx": ["uvx", "uv"],
+    "uvx": ["uvx"],
     "uv": ["uv"],
 }
 
@@ -38,8 +38,15 @@ def check_dependencies(server: McpServer) -> list[str]:
         return []
 
     missing: list[str] = []
+    configured_path = server.stdio_config.env.get("PATH")
     for dep in deps:
-        if shutil.which(dep) is None:
+        # Match the child process environment; aliases are not prerequisites.
+        found = (
+            shutil.which(dep, path=configured_path)
+            if configured_path is not None
+            else shutil.which(dep)
+        )
+        if found is None:
             missing.append(dep)
 
     return missing

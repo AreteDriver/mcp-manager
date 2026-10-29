@@ -75,15 +75,23 @@ class ServerMonitor:
 
         # Register signal handlers for graceful shutdown.
         loop = asyncio.get_running_loop()
+        registered_signals: list[signal.Signals] = []
         for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, self._shutdown_event.set)
+            try:
+                loop.add_signal_handler(sig, self._shutdown_event.set)
+            except (NotImplementedError, RuntimeError):
+                # ProactorEventLoop on Windows does not implement asyncio
+                # signal handlers. Programmatic shutdown remains available.
+                logger.debug("Event loop does not support signal handler %s", sig)
+            else:
+                registered_signals.append(sig)
 
         try:
             tasks = [asyncio.create_task(self._watch(name)) for name in self._states]
             await self._shutdown_event.wait()
             logger.info("Shutdown signal received, stopping servers...")
         finally:
-            for sig in (signal.SIGINT, signal.SIGTERM):
+            for sig in registered_signals:
                 loop.remove_signal_handler(sig)
 
         # Stop all servers.

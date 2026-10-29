@@ -22,7 +22,7 @@ Think of it as **docker-compose for MCP** — a single `.mcp-manager.yml` in you
 
 ## Current status and limitations
 
-This is an active independent project distributed on PyPI. It manages configuration and diagnostics; it does not host MCP servers or guarantee the behavior of third-party servers and clients. See [Status](#status), [Roadmap](ROADMAP.md), and [Security](SECURITY.md) for current scope.
+This branch is the integrated v1.0.0 release candidate. Publication and real-client acceptance are still pending; installing from PyPI does not install this candidate until the release is published. It manages configuration and diagnostics; it does not host MCP servers or guarantee the behavior of third-party servers and clients. See [Status](#status), [Production Readiness](docs/production-readiness.md), and [Security](SECURITY.md) for the supported contract.
 
 ## Why mcp-manager?
 
@@ -84,6 +84,57 @@ mcp-manager sync --ide cursor
 
 ---
 
+## Architecture
+
+`mcp-manager` connects client-specific configuration formats through one typed
+[`McpServer` model](src/mcp_manager/models.py). The [CLI](src/mcp_manager/cli.py)
+dispatches to [command handlers](src/mcp_manager/commands/), which coordinate the
+configuration and diagnostic paths below.
+
+```mermaid
+flowchart TB
+    clients["Existing client configs<br/>JSON / TOML"]
+    project["Project config<br/>.mcp-manager.yml"]
+
+    subgraph manager["mcp-manager"]
+        discovery["Read-only discovery<br/>Client adapters"]
+        loader["Project config loader"]
+        model["McpServer<br/>Shared typed model"]
+        checks["Diagnostics<br/>Health + protocol probes"]
+        writeback["Writeback + adapters<br/>Validate + render"]
+
+        discovery --> model
+        loader --> model
+        model --> checks
+        model --> writeback
+    end
+
+    clients --> discovery
+    project --> loader
+    checks --> servers["MCP servers<br/>stdio / HTTP / SSE"]
+    writeback --> output["Updated client configs<br/>Backup + atomic replacement"]
+```
+
+Arrows show the main configuration and diagnostic flows. Parsing and rendering
+use the same adapter layer; diagnostics connect to or launch the configured servers.
+
+- **Read:** [`discovery.py`](src/mcp_manager/discovery.py) reads client configs;
+  [`project_config.py`](src/mcp_manager/project_config.py) loads project YAML.
+  `sync` uses discovered client configs, while `project export` uses `.mcp-manager.yml`.
+- **Check:** [`health.py`](src/mcp_manager/health.py) runs transport-specific checks;
+  [`compatibility.py`](src/mcp_manager/compatibility.py) probes protocol compatibility
+  through the MCP SDK.
+- **Write:** [`adapters/`](src/mcp_manager/adapters/) owns client dialects and
+  translation capabilities; [`writeback.py`](src/mcp_manager/writeback.py) provides
+  previews, backups, and atomic writes for Codex, Claude Code, Claude Desktop,
+  Cursor, and Windsurf.
+
+Supporting modules handle [registries](src/mcp_manager/registry_sync.py),
+[marketplace installs](src/mcp_manager/marketplace.py),
+[authentication](docs/authentication.md), [version locks](src/mcp_manager/lockfile.py),
+and [process monitoring](src/mcp_manager/monitor.py).
+
+---
 ## What Makes This Different
 
 ### vs. Manual IDE Config
@@ -221,7 +272,7 @@ Validate `.mcp-manager.yml` on every PR:
 
 ```yaml
 # .github/workflows/mcp-validate.yml
-- uses: AreteDriver/mcp-manager/.github/actions/mcp-manager-validate@main
+- uses: AreteDriver/mcp-manager@v1
   with:
     path: "."
     strict: "false"
@@ -398,11 +449,12 @@ ruff format --check
 # 2. Type checking
 mypy src/mcp_manager
 
-# 3. Tests with coverage (must be ≥80%)
-pytest --cov=mcp_manager --cov-fail-under=80
+# 3. Tests with coverage (must be ≥87%)
+pytest --cov=mcp_manager --cov-fail-under=87
 
 # 4. Security audit
-pip-audit
+pip-audit --strict --desc=on .
+bandit -r src -ll
 ```
 
 CI enforces all of the above. PRs that fail any gate will not merge.

@@ -120,6 +120,27 @@ class TestFetchRemoteServers:
         _, kwargs = mock_get.call_args
         assert kwargs["headers"]["Authorization"] == "Bearer tok"
         assert kwargs["headers"]["X-Custom"] == "val"
+        assert kwargs["follow_redirects"] is False
+
+    def test_authenticated_fetch_rejects_redirect(self) -> None:
+        with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
+            mock_get.return_value.status_code = 302
+            mock_get.return_value.raise_for_status = lambda: None
+
+            with pytest.raises(WritebackError, match="redirect"):
+                fetch_remote_servers(
+                    "https://example.com/registry.yaml",
+                    headers={"Authorization": "Bearer private"},
+                )
+
+    def test_fetch_rejects_oversized_registry(self) -> None:
+        with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = "#" * 5_300_000
+            mock_get.return_value.raise_for_status = lambda: None
+
+            with pytest.raises(WritebackError, match="exceeds the 5242880-byte limit"):
+                fetch_remote_servers("https://example.com/registry.yaml")
 
     def test_fetch_invalid_yaml(self) -> None:
         with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
@@ -139,15 +160,15 @@ class TestFetchRemoteServers:
             with pytest.raises(WritebackError, match="must contain a mapping"):
                 fetch_remote_servers("https://example.com/registry.yaml")
 
-    def test_fetch_no_servers_key(self) -> None:
-        """Registry with no 'servers' key but root is dict — returns empty list."""
+    def test_fetch_rejects_wrong_document(self) -> None:
+        """A project metadata document is not an empty registry."""
         with patch("mcp_manager.registry_sync.httpx.get") as mock_get:
             mock_get.return_value.status_code = 200
             mock_get.return_value.text = "project: test"
             mock_get.return_value.raise_for_status = lambda: None
 
-            servers = fetch_remote_servers("https://example.com/registry.yaml")
-            assert servers == []
+            with pytest.raises(WritebackError, match="Invalid registry entry"):
+                fetch_remote_servers("https://example.com/registry.yaml")
 
     def test_fetch_servers_not_a_dict(self) -> None:
         """Registry where 'servers' is not a dict raises error."""
@@ -159,7 +180,7 @@ class TestFetchRemoteServers:
             with pytest.raises(WritebackError, match="No servers found"):
                 fetch_remote_servers("https://example.com/registry.yaml")
 
-    def test_fetch_skips_non_dict_entries(self, tmp_path: Path) -> None:
+    def test_fetch_rejects_non_dict_entries(self, tmp_path: Path) -> None:
         registry = tmp_path / "registry.yaml"
         registry.write_text(
             yaml.dump(
@@ -177,10 +198,8 @@ class TestFetchRemoteServers:
             mock_get.return_value.text = registry.read_text()
             mock_get.return_value.raise_for_status = lambda: None
 
-            servers = fetch_remote_servers("https://example.com/registry.yaml")
-
-        assert len(servers) == 1
-        assert servers[0].name == "good"
+            with pytest.raises(WritebackError, match="Invalid registry entry"):
+                fetch_remote_servers("https://example.com/registry.yaml")
 
 
 class TestComputeDiff:

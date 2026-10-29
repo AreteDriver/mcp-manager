@@ -11,6 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from mcp_manager.atomic import atomic_write_text
 from mcp_manager.config import MANAGER_CONFIG_DIR
 from mcp_manager.exceptions import McpManagerError
 
@@ -91,10 +92,11 @@ class AuthStore:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         data = {url: p.to_dict() for url, p in self._profiles.items()}
         try:
-            tmp_path = self._path.with_suffix(".tmp")
-            tmp_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-            os.chmod(tmp_path, 0o600)
-            tmp_path.replace(self._path)
+            atomic_write_text(
+                self._path,
+                json.dumps(data, indent=2) + "\n",
+                mode=0o600,
+            )
         except OSError as exc:
             raise McpManagerError(f"Failed to save auth store: {exc}") from exc
 
@@ -116,6 +118,10 @@ class AuthStore:
 
     def check_permissions(self) -> tuple[bool, str]:
         if not self._path.exists():
+            return (True, "")
+        if os.name == "nt":
+            # Windows access control is ACL-based; st_mode cannot determine
+            # whether another principal can read this file.
             return (True, "")
         mode = self._path.stat().st_mode
         if mode & 0o077:

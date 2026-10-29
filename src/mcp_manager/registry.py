@@ -9,6 +9,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from mcp_manager.atomic import atomic_write_text
 from mcp_manager.config import MANAGER_REGISTRY_FILE
 from mcp_manager.exceptions import RegistryError
 from mcp_manager.models import HealthResult, McpServer, RegistryEntry
@@ -37,11 +38,11 @@ class ServerRegistry:
         if not isinstance(raw, dict):
             raise RegistryError("Registry file is not a JSON object")
 
-        for name, entry_data in raw.items():
+        for index, (name, entry_data) in enumerate(raw.items(), start=1):
             try:
                 self._entries[name] = RegistryEntry.model_validate(entry_data)
-            except (ValidationError, TypeError, KeyError) as exc:
-                logger.warning("Skipping invalid registry entry %r: %s", name, exc)
+            except (ValidationError, TypeError, KeyError):
+                logger.warning("Skipping invalid registry entry %d", index)
 
     def save(self) -> None:
         """Persist registry to disk."""
@@ -51,9 +52,10 @@ class ServerRegistry:
             for name, entry in self._entries.items()
         }
         try:
-            self._path.write_text(
+            atomic_write_text(
+                self._path,
                 json.dumps(data, indent=2) + "\n",
-                encoding="utf-8",
+                mode=0o600,
             )
         except OSError as exc:
             raise RegistryError(f"Failed to save registry: {exc}") from exc

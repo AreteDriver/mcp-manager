@@ -4,7 +4,8 @@ project: my-project
 servers:
   filesystem:
     command: npx
-    args: ["-y", "@modelcontextprotocol/server-filesystem"]
+    # Version 2.0.1 includes filesystem security fixes and requires Node.js 24+.
+    args: ["-y", "@modelcontextprotocol/server-filesystem@2.0.1"]
     env: {}
     tags: [core, filesystem]
 

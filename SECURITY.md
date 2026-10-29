@@ -4,8 +4,8 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| Latest  | :white_check_mark: |
-| Older   | :x:                |
+| 1.x     | :white_check_mark: |
+| < 1.0   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -31,13 +31,16 @@ Do not open public issues for security bugs.
 
 ## Out of Scope
 
-- Denial of service via resource exhaustion (handled via rate limiting)
+- Resource exhaustion caused by an operator-selected third-party MCP server
 - Social engineering against MCP server operators
 - Vulnerabilities in upstream dependencies (report to vendor)
 
 ## Security Measures
 
 - `pip-audit` and `bandit` run on every push/PR via GitHub Actions
-- Dependencies are pinned and scanned for CVEs
+- Project dependencies are resolved and scanned in strict mode for CVEs
 - Tool parameters validated via Pydantic before execution
-- No secrets committed to source (enforced via `gitleaks`)
+- Repository history is scanned for secrets with `gitleaks`
+- Authenticated registry requests refuse redirects to prevent credential forwarding
+- Remote inherited configs cannot read local files and are size-bounded
+- Config and credential writes use same-directory atomic replacement

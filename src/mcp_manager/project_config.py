@@ -10,6 +10,7 @@ import os
 import shutil
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlsplit
 
 import httpx
 import yaml
@@ -21,6 +22,7 @@ from mcp_manager.writeback import ConfigWriteback
 logger = logging.getLogger(__name__)
 
 DEFAULT_FILENAME = ".mcp-manager.yml"
+_MAX_REMOTE_CONFIG_BYTES = 1024 * 1024
 
 _TEMPLATE: str = """# mcp-manager project configuration
 # Docs: https://github.com/AreteDriver/mcp-manager
@@ -91,8 +93,8 @@ def parse_project_config(
 
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
-        raise WritebackError(f"Failed to parse {path}: {exc}") from exc
+    except yaml.YAMLError:
+        raise WritebackError(f"Failed to parse YAML in {path}") from None
 
     if not isinstance(raw, dict):
         raise WritebackError(f"{path} must contain a YAML mapping")
@@ -147,9 +149,11 @@ def validate_project_config(path: Path) -> list[str]:
             errors.append(f"Server {name!r} is not a mapping")
             continue
 
-        # Check required fields
-        if "command" not in config and "url" not in config:
-            errors.append(f"Server {name!r}: missing 'command' or 'url'")
+        try:
+            _validate_server_definition(name, config)
+        except WritebackError as exc:
+            errors.append(str(exc))
+            continue
 
         # Validate env vars
         env = config.get("env", {})
@@ -170,11 +174,15 @@ def validate_project_config(path: Path) -> list[str]:
     return errors
 
 
-def load_servers_from_config(path: Path) -> list[McpServer]:
+def load_servers_from_config(
+    path: Path, *, resolve_env: bool = True, strict: bool = False
+) -> list[McpServer]:
     """Parse .mcp-manager.yml and return McpServer objects.
 
     Args:
         path: Path to the YAML file.
+        resolve_env: Resolve references for runtime use; disable before persistence.
+        strict: Reject the whole configuration if any entry is invalid.
 
     Returns:
         List of McpServer instances.
@@ -183,14 +191,22 @@ def load_servers_from_config(path: Path) -> list[McpServer]:
     servers_raw = data.get("servers", {})
     results: list[McpServer] = []
 
-    for name, config in servers_raw.items():
-        if not isinstance(config, dict):
-            logger.warning("Skipping non-dict server %r", name)
-            continue
+    for index, (name, config) in enumerate(servers_raw.items(), start=1):
+        error = f"Invalid project server entry {index}"
         try:
-            results.append(_config_to_server(name, config))
-        except (WritebackError, KeyError, TypeError, ValueError) as exc:
-            logger.warning("Failed to parse server %r: %s", name, exc)
+            if not isinstance(name, str) or not name or not isinstance(config, dict):
+                raise WritebackError(error)
+            for field in ("env", "headers"):
+                if field in config and not isinstance(config[field], dict):
+                    raise WritebackError(error)
+            for field in ("args", "tags"):
+                if field in config and not isinstance(config[field], list):
+                    raise WritebackError(error)
+            results.append(_config_to_server(name, config, resolve_env=resolve_env))
+        except (WritebackError, KeyError, TypeError, ValueError):
+            if strict:
+                raise WritebackError(error) from None
+            logger.warning("Skipping invalid project server entry %d", index)
 
     return results
 
@@ -232,6 +248,8 @@ def _resolve_extends(
     raw: dict[str, Any],
     base_dir: Path,
     visited: set[str],
+    *,
+    allow_local: bool = True,
 ) -> dict[str, Any]:
     """Resolve ``extends`` references and merge configs.
 
@@ -263,7 +281,7 @@ def _resolve_extends(
     merged: dict[str, Any] = {"project": "", "servers": {}}
 
     for source in sources:
-        base = _fetch_base_config(source, base_dir, visited)
+        base = _fetch_base_config(source, base_dir, visited, allow_local=allow_local)
         merged["project"] = base.get("project", merged["project"])
         base_servers = base.get("servers", {})
         if isinstance(base_servers, dict):
@@ -287,6 +305,8 @@ def _fetch_base_config(
     source: str,
     base_dir: Path,
     visited: set[str],
+    *,
+    allow_local: bool = True,
 ) -> dict[str, Any]:
     """Fetch and parse a single base config source.
 
@@ -299,6 +319,8 @@ def _fetch_base_config(
         Parsed base config dict.
     """
     if source.startswith("file://"):
+        if not allow_local:
+            raise WritebackError("Remote configs cannot extend local files")
         path = Path(source[7:])
         if not path.is_absolute():
             path = base_dir / path
@@ -311,6 +333,8 @@ def _fetch_base_config(
         return _fetch_remote_config(source, visited)
 
     # Treat as local relative path
+    if not allow_local:
+        raise WritebackError("Remote configs cannot extend local files")
     local_path = base_dir / source
     if not local_path.is_file():
         raise WritebackError(f"Extends source not found: {source} (looked in {base_dir})")
@@ -353,26 +377,42 @@ def _fetch_remote_config(
     Returns:
         Parsed config dict.
     """
+    canonical = f"remote:{url}"
+    if canonical in visited:
+        raise WritebackError("Circular extends reference detected in remote config")
+    visited.add(canonical)
     try:
-        resp = httpx.get(url, timeout=15, follow_redirects=True)
-        resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise WritebackError(f"Failed to fetch extends source {url}: {exc}") from exc
+        try:
+            resp = httpx.get(url, timeout=15, follow_redirects=True)
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise WritebackError(f"Failed to fetch extends source ({type(exc).__name__})") from None
 
-    try:
-        raw = yaml.safe_load(resp.text)
-    except yaml.YAMLError as exc:
-        raise WritebackError(f"Failed to parse YAML from {url}: {exc}") from exc
+        if len(resp.text.encode("utf-8")) > _MAX_REMOTE_CONFIG_BYTES:
+            raise WritebackError(f"Remote config exceeds the {_MAX_REMOTE_CONFIG_BYTES}-byte limit")
 
-    if not isinstance(raw, dict):
-        raise WritebackError(f"Remote config at {url} must contain a YAML mapping")
+        try:
+            raw = yaml.safe_load(resp.text)
+        except yaml.YAMLError:
+            raise WritebackError("Failed to parse YAML from remote extends source") from None
 
-    # Remote configs may themselves have extends; resolve them.
-    # We use a sentinel path so circular detection works.
-    if "extends" in raw:
-        raw = _resolve_extends(raw, Path.cwd(), visited)
+        if not isinstance(raw, dict):
+            raise WritebackError("Remote config must contain a YAML mapping")
 
-    return cast(dict[str, Any], raw)
+        # A remote config may inherit other remote configs, but never local
+        # files. This prevents an untrusted shared config from reading paths on
+        # the operator's machine through nested ``extends`` directives.
+        if "extends" in raw:
+            raw = _resolve_extends(
+                raw,
+                Path.cwd(),
+                visited,
+                allow_local=False,
+            )
+
+        return cast(dict[str, Any], raw)
+    finally:
+        visited.discard(canonical)
 
 
 def _extract_env_var_names(value: str) -> list[str]:
@@ -411,14 +451,58 @@ def _resolve_env_var(value: str) -> str:
     return os.environ.get(var_name, value)
 
 
-def _config_to_server(name: str, config: dict[str, Any]) -> McpServer:
+def _validate_server_definition(name: str, config: dict[str, Any]) -> None:
+    """Validate transport fields without coercing malformed data or echoing values."""
+    if not isinstance(name, str) or not name.strip():
+        raise WritebackError("Server name must be a non-empty string")
+    if not isinstance(config, dict):
+        raise WritebackError("Server definition must be a mapping")
+    if "command" not in config and "url" not in config:
+        raise WritebackError("Server missing 'command' or 'url'")
+    transport = config.get("type", "stdio" if "command" in config else "sse")
+    if not isinstance(transport, str) or transport not in {"stdio", "sse", "http"}:
+        raise WritebackError("Server type must be stdio, sse or http")
+    if "command" in config:
+        if transport != "stdio" or "url" in config:
+            raise WritebackError("Server has conflicting transport fields")
+        if not isinstance(config["command"], str) or not config["command"].strip():
+            raise WritebackError("Server command must be a non-empty string")
+    else:
+        if transport == "stdio":
+            raise WritebackError("Stdio server requires a command")
+        url = config.get("url")
+        if not isinstance(url, str) or any(c.isspace() for c in url):
+            raise WritebackError("Server URL must be an HTTP(S) URL")
+        try:
+            parsed = urlsplit(url)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                raise ValueError
+            _ = parsed.port  # Validate malformed/out-of-range ports.
+        except ValueError:
+            raise WritebackError("Server URL must be an HTTP(S) URL") from None
+    for field in ("args", "tags"):
+        value = config.get(field, [])
+        if not isinstance(value, list) or not all(
+            isinstance(v, str) or (field == "tags" and v is None) for v in value
+        ):
+            raise WritebackError(f"Server {field} must be a list of strings")
+    for field in ("env", "headers"):
+        value = config.get(field, {})
+        if not isinstance(value, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in value.items()
+        ):
+            raise WritebackError(f"Server {field} must map strings to strings")
+
+
+def _config_to_server(name: str, config: dict[str, Any], *, resolve_env: bool = True) -> McpServer:
     """Convert a .mcp-manager.yml server dict to McpServer."""
+    _validate_server_definition(name, config)
     if "command" in config:
         env = config.get("env", {})
         # Resolve shell env vars
         resolved_env = {}
         for key, value in env.items():
-            if isinstance(value, str) and value.startswith("$"):
+            if resolve_env and isinstance(value, str) and value.startswith("$"):
                 resolved_env[key] = _resolve_env_var(value)
             else:
                 resolved_env[key] = str(value)
