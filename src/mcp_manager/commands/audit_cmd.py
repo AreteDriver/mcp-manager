@@ -1,4 +1,4 @@
-"""mcp-manager audit command implementations."""
+"""arete-mcp audit command implementations."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def _resolve_spec(probe_spec: Path | None) -> Path:
     builtin = get_builtin_spec_path()
     if not builtin.exists():
         raise McpManagerError(
-            "Built-in probe spec not found. Install mcp-manager with audit extras, "
+            "Built-in probe spec not found. Install arete-mcp with audit extras, "
             "or provide --probe-spec explicitly."
         )
     return builtin
@@ -65,7 +65,7 @@ def audit_runbook_impl(probe_spec: Path | None, output: Path | None) -> None:
         raise
     spec = load_spec(spec_path)
     lines = [
-        f"# mcp-manager audit runbook — {spec.name}",
+        f"# arete-mcp audit runbook — {spec.name}",
         "",
         f"{spec.description}",
         "",
@@ -74,7 +74,7 @@ def audit_runbook_impl(probe_spec: Path | None, output: Path | None) -> None:
         "1. Start the harness server in one terminal:",
         "",
         "   ```bash",
-        f"   mcp-manager audit serve --probe-spec {spec_path}",
+        f"   arete-mcp audit serve --probe-spec {spec_path}",
         "   ```",
         "",
         "2. Attach the server to Claude Code (`claude mcp add` or via .claude/mcp.json).",
@@ -123,7 +123,7 @@ def audit_serve_impl(
         raise
     spec = load_spec(spec_path)
     console.print(
-        f"[bold]mcp-manager audit[/bold] serving {len(spec.probes)} probe(s) "
+        f"[bold]arete-mcp audit[/bold] serving {len(spec.probes)} probe(s) "
         f"from {spec.name} ({spec_path})",
         style="cyan",
     )

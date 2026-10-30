@@ -25,14 +25,14 @@ There is no persistent credential store, no env-var fallback, and no validation 
 
 ```bash
 # Store credentials for a registry URL
-mcp-manager registry login https://reg.example.com/mcp.yaml --token ghp_xxx
-mcp-manager registry login https://reg.example.com/mcp.yaml --user alice --password secret
+arete-mcp registry login https://reg.example.com/mcp.yaml --token ghp_xxx
+arete-mcp registry login https://reg.example.com/mcp.yaml --user alice --password secret
 
 # List stored profiles
-mcp-manager registry auth-list
+arete-mcp registry auth-list
 
 # Remove a profile
-mcp-manager registry logout https://reg.example.com/mcp.yaml
+arete-mcp registry logout https://reg.example.com/mcp.yaml
 ```
 
 ### Storage
@@ -102,7 +102,7 @@ Priority (highest first):
 `registry login` does a HEAD request to the registry URL with the provided credentials before storing. If `401` or `403`, abort with error and do NOT write to auth.json.
 
 ```
-$ mcp-manager registry login https://bad.example.com --token wrong
+$ arete-mcp registry login https://bad.example.com --token wrong
 [red]Authentication failed: HTTP 401 Unauthorized[/red]
 Credentials NOT stored.
 ```
@@ -158,7 +158,7 @@ CI gate: `__version__` in `__init__.py` must match the tag being pushed (minus `
 - `--help` text for all new commands
 - README section: "Private Registries & Authentication"
 - MkDocs page: `docs/authentication.md`
-- `mcp-manager registry login --help` includes security warning
+- `arete-mcp registry login --help` includes security warning
 
 ### Coverage
 

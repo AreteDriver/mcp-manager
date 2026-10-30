@@ -8,8 +8,8 @@ drift between the package and documentation site.
 ## 1.0.0 Highlights
 
 - Native Codex TOML discovery and write-back
-- Target capabilities via `mcp-manager targets`
-- Static JSON/TOML, path, and environment diagnostics via `mcp-manager doctor`
+- Target capabilities via `arete-mcp targets`
+- Static JSON/TOML, path, and environment diagnostics via `arete-mcp doctor`
 - Official project scopes for Codex, Claude Code, and Cursor
 - Lossy-translation warnings and strict diagnostic parsing
 - MCP 2026-07-28 protocol probing with legacy fallback

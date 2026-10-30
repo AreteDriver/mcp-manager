@@ -1,4 +1,4 @@
-name: "MCP Manager Validate"
+name: "Arete MCP Validate"
 description: "Validate .mcp-manager.yml project config and optionally run deep health checks"
 author: "AreteDriver"
 branding:
@@ -15,7 +15,7 @@ inputs:
     required: false
     default: "false"
   lockfile-check:
-    description: "Run mcp-manager lock --check to validate version pinning"
+    description: "Run arete-mcp lock --check to validate version pinning"
     required: false
     default: "false"
   version:
@@ -67,11 +67,11 @@ runs:
       run: |
         args=(--path "$MCP_MANAGER_PATH")
         [[ "$MCP_MANAGER_STRICT" == "true" ]] && args+=(--strict)
-        mcp-manager validate "${args[@]}"
+        arete-mcp validate "${args[@]}"
 
     - name: Check lockfile
       if: inputs.lockfile-check == 'true'
       shell: bash
       env:
         MCP_MANAGER_PATH: ${{ inputs.path }}
-      run: mcp-manager lock --check --path "$MCP_MANAGER_PATH"
+      run: arete-mcp lock --check --path "$MCP_MANAGER_PATH"

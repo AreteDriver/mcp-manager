@@ -1,6 +1,6 @@
 # Client Target Support
 
-`mcp-manager` uses a target adapter for each MCP client. Adapters own the native
+`arete-mcp` uses a target adapter for each MCP client. Adapters own the native
 file format, supported scopes and transports, target-only fields, and translation
 warnings.
 
@@ -17,8 +17,8 @@ warnings.
 Inspect the runtime matrix instead of relying on copied paths:
 
 ```bash
-mcp-manager targets
-mcp-manager targets --json
+arete-mcp targets
+arete-mcp targets --json
 ```
 
 ## Codex
@@ -56,7 +56,7 @@ servers use the same wrapper in `.mcp.json`:
 }
 ```
 
-Discovery also reads the older mcp-manager top-level `.mcp.json` shape for
+Discovery also reads the older arete-mcp top-level `.mcp.json` shape for
 backward compatibility. New writes always use Claude Code's official wrapper.
 
 ## Claude Desktop
@@ -86,13 +86,13 @@ a repository-scoped MCP file, so `--scope project` is rejected for this target.
 
 ```bash
 # Validate syntax, executable paths, cwd values, and env-var presence.
-mcp-manager doctor --project .
+arete-mcp doctor --project .
 
 # Preview target-native output and translation warnings.
-mcp-manager sync --ide codex --dry-run
+arete-mcp sync --ide codex --dry-run
 
 # Write a shared project config.
-mcp-manager sync --ide cursor --scope project --project . --create
+arete-mcp sync --ide cursor --scope project --project . --create
 ```
 
 Static diagnostics never print credential values. They report only missing

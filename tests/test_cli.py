@@ -48,6 +48,17 @@ class TestVersion:
         assert result.exit_code == 0
         assert __version__ in result.output
 
+    def test_uses_arete_mcp_brand(self) -> None:
+        result = runner.invoke(app, ["--version"])
+        assert result.output.startswith("arete-mcp ")
+
+
+class TestBrandingCompatibility:
+    def test_help_uses_canonical_cli_name(self) -> None:
+        result = runner.invoke(app, ["--help"])
+        assert result.exit_code == 0
+        assert "Usage: arete-mcp" in result.output
+
 
 class TestNoArgs:
     def test_shows_help(self) -> None:

@@ -1,6 +1,6 @@
 # Team Features
 
-mcp-manager is built for teams. Here's how to use it at scale.
+arete-mcp is built for teams. Here's how to use it at scale.
 
 ---
 
@@ -9,7 +9,7 @@ mcp-manager is built for teams. Here's how to use it at scale.
 New team members run one command:
 
 ```bash
-mcp-manager init
+arete-mcp init
 ```
 
 This:
@@ -22,7 +22,7 @@ This:
 Non-interactive mode (for CI or scripts):
 
 ```bash
-mcp-manager init --yes --template python --project-name my-service
+arete-mcp init --yes --template python --project-name my-service
 ```
 
 ---
@@ -89,13 +89,13 @@ Then filter across commands:
 
 ```bash
 # Health check only production servers
-mcp-manager health --tag production
+arete-mcp health --tag production
 
 # Sync only stable servers to Cursor
-mcp-manager sync --ide cursor --exclude-tag experimental
+arete-mcp sync --ide cursor --exclude-tag experimental
 
 # Monitor backend servers only
-mcp-manager monitor --tag backend
+arete-mcp monitor --tag backend
 ```
 
 ---
@@ -105,13 +105,13 @@ mcp-manager monitor --tag backend
 Standardize new repos with built-in templates:
 
 ```bash
-mcp-manager template list
+arete-mcp template list
 # python  — filesystem + git (mypy + ruff CI gate)
 # node    — filesystem + git (npm audit CI gate)
 # data    — postgres + filesystem + git
 # ai      — web search + browser automation
 
-mcp-manager template use data --project-name analytics-pipeline
+arete-mcp template use data --project-name analytics-pipeline
 ```
 
 ---
@@ -133,7 +133,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install arete-mcp
-      - run: mcp-manager validate --strict
+      - run: arete-mcp validate --strict
 ```
 
 With `--strict`, also runs deep health checks (spawns servers, validates tools/list).
@@ -146,11 +146,11 @@ Ensure every team member uses identical server versions:
 
 ```bash
 # Generate lockfile
-mcp-manager lock
+arete-mcp lock
 
 # Commit .mcp-manager.lock to git
 # CI validates it hasn't drifted
-mcp-manager lock --check
+arete-mcp lock --check
 ```
 
 The lockfile records resolved npm versions for `npx`-based servers.

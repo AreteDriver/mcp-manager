@@ -56,7 +56,7 @@ def uninstall_impl(
     if not matches:
         console.print(
             f"[yellow]Server not found in any client config:[/yellow] {name}\n"
-            f"[dim]Use `mcp-manager list` to see configured servers.[/dim]"
+            f"[dim]Use `arete-mcp list` to see configured servers.[/dim]"
         )
         raise McpManagerError(f"Server not found in any client config: {name}")
 

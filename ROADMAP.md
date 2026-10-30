@@ -1,8 +1,8 @@
-# MCP Manager Roadmap
+# Arete MCP Roadmap
 
 **Candidate version:** v1.0.0 — integrated configuration-governance release candidate
 
-MCP Manager follows a deliberately narrow contract: discover, translate,
+Arete MCP follows a deliberately narrow contract: discover, translate,
 diagnose, validate, and safely synchronize MCP configuration. It does not host
 MCP servers or assume authority over a client's runtime policy.
 
