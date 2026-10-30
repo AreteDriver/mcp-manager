@@ -2,7 +2,7 @@
 
 
 class McpManagerError(Exception):
-    """Base exception for all mcp-manager errors."""
+    """Base exception for all arete-mcp errors."""
 
 
 class DiscoveryError(McpManagerError):

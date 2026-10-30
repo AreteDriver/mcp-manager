@@ -37,7 +37,7 @@ class ConfigDiscovery:
                     continue
                 if adapter.project_path == Path(PROJECT_CONFIG_NAME):
                     # Claude's project file is already handled by the parent-walking
-                    # scanner, which also supports mcp-manager's legacy top-level form.
+                    # scanner, which also supports arete-mcp's legacy top-level form.
                     continue
                 project_path = adapter.resolve_path(scope="project", project_dir=project_dir)
                 servers.extend(self._scan_adapter(adapter, project_path))

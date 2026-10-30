@@ -1,6 +1,6 @@
 # Quickstart
 
-Get mcp-manager running in under 2 minutes.
+Get arete-mcp running in under 2 minutes.
 
 ---
 
@@ -13,7 +13,7 @@ pip install arete-mcp
 Verify it works:
 
 ```bash
-mcp-manager --version
+arete-mcp --version
 ```
 
 ---
@@ -23,7 +23,7 @@ mcp-manager --version
 See every MCP server configured across all your IDEs:
 
 ```bash
-mcp-manager list
+arete-mcp list
 ```
 
 Example output:
@@ -43,7 +43,7 @@ Example output:
 Make sure they actually work:
 
 ```bash
-mcp-manager health --deep
+arete-mcp health --deep
 ```
 
 This spawns each stdio server, runs the MCP handshake, calls `tools/list`, and validates dependencies are on PATH.
@@ -51,8 +51,8 @@ This spawns each stdio server, runs the MCP handshake, calls `tools/list`, and v
 Static target diagnostics are faster and do not start servers:
 
 ```bash
-mcp-manager targets
-mcp-manager doctor --project .
+arete-mcp targets
+arete-mcp doctor --project .
 ```
 
 `doctor` validates native JSON/TOML syntax, executable and argument paths,
@@ -67,7 +67,7 @@ For a new project, use the onboarding wizard:
 
 ```bash
 cd my-project
-mcp-manager init
+arete-mcp init
 ```
 
 This will:
@@ -80,7 +80,7 @@ This will:
 Or skip the wizard and use a template directly:
 
 ```bash
-mcp-manager template use python
+arete-mcp template use python
 ```
 
 ---
@@ -90,13 +90,13 @@ mcp-manager template use python
 Preview changes without touching anything:
 
 ```bash
-mcp-manager sync --ide cursor --dry-run
+arete-mcp sync --ide cursor --dry-run
 ```
 
 Then commit:
 
 ```bash
-mcp-manager sync --ide cursor
+arete-mcp sync --ide cursor
 ```
 
 Your Cursor config (`~/.cursor/mcp.json`) is updated atomically with a backup created first.
@@ -104,14 +104,14 @@ Your Cursor config (`~/.cursor/mcp.json`) is updated atomically with a backup cr
 Codex is a native TOML target:
 
 ```bash
-mcp-manager sync --ide codex --dry-run
-mcp-manager sync --ide codex
+arete-mcp sync --ide codex --dry-run
+arete-mcp sync --ide codex
 ```
 
 To write a shared client-native project config, select project scope explicitly:
 
 ```bash
-mcp-manager sync --ide cursor --scope project --project . --create
+arete-mcp sync --ide cursor --scope project --project . --create
 ```
 
 ---
@@ -132,7 +132,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install arete-mcp
-      - run: mcp-manager validate --strict
+      - run: arete-mcp validate --strict
 ```
 
 Catches missing env vars, broken commands, and failing servers before merge.

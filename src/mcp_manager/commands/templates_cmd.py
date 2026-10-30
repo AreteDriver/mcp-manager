@@ -1,4 +1,4 @@
-"""Template command implementations (`mcp-manager template list`, `template use`)."""
+"""Template command implementations (`arete-mcp template list`, `template use`)."""
 
 from __future__ import annotations
 
@@ -39,10 +39,10 @@ def template_use_impl(
     """
     if name not in list_templates():
         console.print(
-            f"[red]Unknown template:[/red] {name}. Run `mcp-manager template list` to see options."
+            f"[red]Unknown template:[/red] {name}. Run `arete-mcp template list` to see options."
         )
         raise McpManagerError(
-            f"Unknown template: {name}. Run `mcp-manager template list` to see options."
+            f"Unknown template: {name}. Run `arete-mcp template list` to see options."
         )
 
     config_path = project_dir / DEFAULT_FILENAME

@@ -1,6 +1,6 @@
 # Production Readiness
 
-This document is the release contract for MCP Manager 1.x. A release is ready
+This document is the release contract for Arete MCP 1.x. A release is ready
 only when every automated gate is green on the exact tag candidate and the
 manual dogfood evidence below is complete.
 
@@ -16,7 +16,7 @@ manual dogfood evidence below is complete.
 | Stability | CLI command names, documented exit behavior, and project config schema follow SemVer |
 
 Client-private or undocumented state is not part of the contract. In
-particular, MCP Manager does not edit Claude Code's private per-project entries
+particular, Arete MCP does not edit Claude Code's private per-project entries
 inside `~/.claude.json`.
 
 ## Automated release gates
@@ -119,7 +119,7 @@ and the integration PR for subsequent validation receipts.
 
 Every existing client config is copied to a sibling
 `.mcp-manager-backup` file before replacement. To recover, stop any active
-monitor, copy that backup over the client config, and rerun `mcp-manager doctor`
+monitor, copy that backup over the client config, and rerun `arete-mcp doctor`
 before attempting another sync. A failed release is yanked from PyPI only when
 installation itself is unsafe; otherwise publish a patch release so existing
 environments have a normal upgrade path.

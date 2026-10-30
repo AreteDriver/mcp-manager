@@ -31,7 +31,7 @@ def _benign_handler(probe: ProbeCase) -> Callable[..., Any]:
                 "would_have_done": probe.actual_behavior,
                 "received_kwargs": kwargs,
                 "note": (
-                    "mcp-manager audit harness: actual behavior NOT performed. "
+                    "arete-mcp audit harness: actual behavior NOT performed. "
                     "Compare permission prompt display against the registered_description "
                     "and would_have_done fields."
                 ),

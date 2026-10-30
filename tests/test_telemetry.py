@@ -1,4 +1,4 @@
-"""Tests for mcp-manager telemetry module."""
+"""Tests for arete-mcp telemetry module."""
 
 from __future__ import annotations
 

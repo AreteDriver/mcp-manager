@@ -2,7 +2,7 @@
 
 ## Context
 
-The MCP Manager CLI uses Typer (Click-based), which runs synchronous command
+The Arete MCP CLI uses Typer (Click-based), which runs synchronous command
 callbacks. Several commands need to invoke async health checkers:
 
 - `health` → `asyncio.run(checker.check_all(servers))`
