@@ -57,7 +57,7 @@ class TestBrandingCompatibility:
     def test_help_uses_canonical_cli_name(self) -> None:
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        assert "Usage: arete-mcp" in result.output
+        assert "arete-mcp [OPTIONS] COMMAND" in result.output
 
 
 class TestNoArgs:
