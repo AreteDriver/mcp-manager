@@ -196,7 +196,7 @@ def check_wheel_install(wheel: Path, root: Path) -> str:
         text=True,
         env=child_environment,
     )
-    expected = f"mcp-manager {__version__}"
+    expected = f"arete-mcp {__version__}"
     if result.stdout.strip() != expected:
         raise RuntimeError(f"wheel reported {result.stdout.strip()!r}, expected {expected!r}")
     return result.stdout.strip()
