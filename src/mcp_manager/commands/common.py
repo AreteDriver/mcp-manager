@@ -53,7 +53,7 @@ def _server_summary(server: McpServer) -> str:
 
 
 def _get_registry(path: Path | None = None) -> ServerRegistry:
-    """Load the mcp-manager registry."""
+    """Load the arete-mcp registry."""
     reg = ServerRegistry(path=path)
     reg.load()
     return reg

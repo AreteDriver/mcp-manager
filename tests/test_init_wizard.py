@@ -1,4 +1,4 @@
-"""Tests for the onboarding wizard (`mcp-manager init`)."""
+"""Tests for the onboarding wizard (`arete-mcp init`)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ runner = CliRunner()
 
 
 class TestInitWizard:
-    """CLI tests for `mcp-manager init`."""
+    """CLI tests for `arete-mcp init`."""
 
     def test_init_creates_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)

@@ -1,4 +1,4 @@
-"""Pydantic v2 models for all mcp-manager data structures."""
+"""Pydantic v2 models for all arete-mcp data structures."""
 
 from __future__ import annotations
 
@@ -134,7 +134,7 @@ class ServerMapping(BaseModel):
 
 
 class RegistryEntry(BaseModel):
-    """A server entry in the mcp-manager persistent registry."""
+    """A server entry in the arete-mcp persistent registry."""
 
     server: McpServer
     added_at: float = Field(default_factory=time.time)

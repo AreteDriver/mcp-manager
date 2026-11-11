@@ -44,7 +44,7 @@ def _make_project_file(path: Path) -> None:
 
 
 class TestRegistryDiff:
-    """Tests for `mcp-manager registry diff`."""
+    """Tests for `arete-mcp registry diff`."""
 
     def test_diff_shows_changes(self, tmp_path: Path) -> None:
         project_dir = tmp_path / "project"
@@ -229,7 +229,7 @@ class TestRegistryDiff:
 
 
 class TestRegistryPull:
-    """Tests for `mcp-manager registry pull`."""
+    """Tests for `arete-mcp registry pull`."""
 
     def test_pull_union(self, tmp_path: Path) -> None:
         project_dir = tmp_path / "project"

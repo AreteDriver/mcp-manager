@@ -1,4 +1,4 @@
-name: MCP Manager Validate
+name: Arete MCP Validate
 description: Validate shared MCP configs, dependencies, health, and lockfiles in CI
 author: AreteDriver
 
@@ -20,7 +20,7 @@ inputs:
     required: false
     default: "false"
   python-version:
-    description: Python version used to run mcp-manager
+    description: Python version used to run arete-mcp
     required: false
     default: "3.12"
   uv-version:
@@ -36,7 +36,7 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
 
-    - name: Install mcp-manager from this release
+    - name: Install arete-mcp from this release
       shell: bash
       run: python -m pip install --disable-pip-version-check "$GITHUB_ACTION_PATH"
 
@@ -54,11 +54,11 @@ runs:
       run: |
         args=(--path "$MCP_MANAGER_PATH")
         [[ "$MCP_MANAGER_STRICT" == "true" ]] && args+=(--strict)
-        mcp-manager validate "${args[@]}"
+        arete-mcp validate "${args[@]}"
 
     - name: Verify MCP lockfile
       if: inputs.lockfile-check == 'true'
       shell: bash
       env:
         MCP_MANAGER_PATH: ${{ inputs.path }}
-      run: mcp-manager lock --check --path "$MCP_MANAGER_PATH"
+      run: arete-mcp lock --check --path "$MCP_MANAGER_PATH"

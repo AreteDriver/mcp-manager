@@ -1,4 +1,4 @@
-"""mcp-manager — Manage MCP servers across agentic IDEs."""
+"""Arete MCP — Manage MCP servers across agentic IDEs."""
 
 __version__ = "1.0.0"
 

@@ -136,7 +136,7 @@ def health_impl(
     checker = HealthChecker(timeout=timeout, deep=deep)
     results = asyncio.run(checker.check_all(servers))
 
-    # Persist health results to the mcp-manager registry.
+    # Persist health results to the arete-mcp registry.
     reg = _get_registry()
     reg.load()
     updated = False
@@ -177,7 +177,7 @@ def add_impl(
     transport: str,
     args: list[str] | None,
 ) -> None:
-    """Add a new MCP server to the mcp-manager registry."""
+    """Add a new MCP server to the arete-mcp registry."""
     track_command("add")
     if command and url:
         console.print("[red]Specify --command (stdio) or --url (network), not both.[/red]")
@@ -220,7 +220,7 @@ def add_impl(
 
 
 def remove_impl(name: str) -> None:
-    """Remove a server from the mcp-manager registry."""
+    """Remove a server from the arete-mcp registry."""
     track_command("remove")
     reg = _get_registry()
     if reg.remove(name):
@@ -359,7 +359,7 @@ def status_impl() -> None:
     info = get_license_info()
     tier_config = TIER_DEFINITIONS[info.tier]
 
-    console.print(f"\n[bold]mcp-manager {__version__}[/bold]")
+    console.print(f"\n[bold]arete-mcp {__version__}[/bold]")
     console.print(f"[bold]Tier:[/bold] {tier_config.name} ({tier_config.price_label})")
 
     if info.license_key:

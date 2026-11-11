@@ -1,4 +1,4 @@
-"""Local-only telemetry for mcp-manager usage tracking.
+"""Local-only telemetry for arete-mcp usage tracking.
 
 Opt-in via MCP_MANAGER_TELEMETRY=1 environment variable.
 All data stays on disk — never transmitted anywhere.

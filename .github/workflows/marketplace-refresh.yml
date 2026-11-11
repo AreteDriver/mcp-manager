@@ -46,7 +46,7 @@ jobs:
           if [[ "$WRITE_CHANGES" != "true" ]]; then
             args+=(--dry-run)
           fi
-          timeout --signal=TERM --kill-after=30s 10m mcp-manager "${args[@]}"
+          timeout --signal=TERM --kill-after=30s 10m arete-mcp "${args[@]}"
 
       - name: Commit updated scores
         if: github.event_name == 'schedule' || inputs.write_changes

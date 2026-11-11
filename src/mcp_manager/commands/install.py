@@ -41,7 +41,7 @@ def install_impl(
     if entry is None:
         console.print(
             f"[red]Server not found in registry:[/red] {name}\n"
-            f"[dim]Add it first with:[/dim] mcp-manager add {name} --command ..."
+            f"[dim]Add it first with:[/dim] arete-mcp add {name} --command ..."
         )
         raise McpManagerError(f"Server not found in registry: {name}")
 
@@ -110,7 +110,7 @@ def install_impl(
 
 
 def _get_registry() -> ServerRegistry:
-    """Load the mcp-manager registry."""
+    """Load the arete-mcp registry."""
     reg = ServerRegistry()
     reg.load()
     return reg

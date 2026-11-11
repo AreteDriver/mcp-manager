@@ -183,6 +183,6 @@ def get_upgrade_message(feature: str) -> str:
     """Return a user-facing upgrade prompt for a gated feature."""
     pro_config = TIER_DEFINITIONS[Tier.PRO]
     return (
-        f"'{feature}' requires mcp-manager Pro ({pro_config.price_label}).\n"
+        f"'{feature}' requires arete-mcp Pro ({pro_config.price_label}).\n"
         f"Set your key via: export {_ENV_LICENSE_KEY}=MCPM-XXXX-XXXX-XXXX"
     )

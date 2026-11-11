@@ -1,6 +1,6 @@
 # Authentication
 
-Authenticate against private registries so `mcp-manager registry diff` and `registry pull` can fetch server definitions behind HTTP Basic or Bearer auth.
+Authenticate against private registries so `arete-mcp registry diff` and `registry pull` can fetch server definitions behind HTTP Basic or Bearer auth.
 
 ---
 
@@ -8,16 +8,16 @@ Authenticate against private registries so `mcp-manager registry diff` and `regi
 
 ```bash
 # Store a Bearer token — validates before saving via HEAD request
-mcp-manager registry login https://reg.example.com/mcp.yaml --token ghp_xxx
+arete-mcp registry login https://reg.example.com/mcp.yaml --token ghp_xxx
 
 # Store Basic auth credentials
-mcp-manager registry login https://reg.example.com/mcp.yaml --user alice --password secret
+arete-mcp registry login https://reg.example.com/mcp.yaml --user alice --password secret
 
 # List stored profiles (credentials are masked)
-mcp-manager registry auth-list
+arete-mcp registry auth-list
 
 # Remove a profile
-mcp-manager registry logout https://reg.example.com/mcp.yaml
+arete-mcp registry logout https://reg.example.com/mcp.yaml
 ```
 
 ---
@@ -90,5 +90,5 @@ Some registries don't support `HEAD` requests. The warning is informational — 
 ### Registry diff doesn't use my stored profile
 
 - Ensure the URL matches exactly (trailing slashes are normalized, but paths must match).
-- Check with `mcp-manager registry auth-list` that the profile exists.
+- Check with `arete-mcp registry auth-list` that the profile exists.
 - Verify `MCP_MANAGER_AUTH_FILE` isn't pointing to a different file.

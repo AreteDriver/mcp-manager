@@ -1,6 +1,6 @@
-# MCP Manager Marketplace
+# Arete MCP Marketplace
 
-The **MCP Manager Marketplace** is a curated directory of MCP servers that you can discover, inspect, and install directly from the CLI.
+The **Arete MCP Marketplace** is a curated directory of MCP servers that you can discover, inspect, and install directly from the CLI.
 
 ---
 
@@ -8,17 +8,17 @@ The **MCP Manager Marketplace** is a curated directory of MCP servers that you c
 
 ```bash
 # Search for servers
-mcp-manager search filesystem
-mcp-manager search --category Database
+arete-mcp search filesystem
+arete-mcp search --category Database
 
 # View details before installing
-mcp-manager info postgres
+arete-mcp info postgres
 
 # Install a server into your project
-mcp-manager install postgres
+arete-mcp install postgres
 
 # Install and auto-generate lockfile
-mcp-manager install postgres --lock
+arete-mcp install postgres --lock
 ```
 
 ---
@@ -30,7 +30,7 @@ mcp-manager install postgres --lock
 Search the marketplace by name, description, or category.
 
 ```bash
-mcp-manager search <query> [options]
+arete-mcp search <query> [options]
 ```
 
 **Options:**
@@ -42,13 +42,13 @@ mcp-manager search <query> [options]
 
 ```bash
 # Search by keyword
-mcp-manager search postgres
+arete-mcp search postgres
 
 # List all servers in a category
-mcp-manager search "" --category Database
+arete-mcp search "" --category Database
 
 # Include unverified servers
-mcp-manager search filesystem --include-unverified
+arete-mcp search filesystem --include-unverified
 ```
 
 **Default behavior:** Only verified servers are shown. Use `--include-unverified` to browse the full catalog.
@@ -60,7 +60,7 @@ mcp-manager search filesystem --include-unverified
 Show detailed information about a specific marketplace server.
 
 ```bash
-mcp-manager info <name> [options]
+arete-mcp info <name> [options]
 ```
 
 **Options:**
@@ -69,7 +69,7 @@ mcp-manager info <name> [options]
 **Example:**
 
 ```bash
-mcp-manager info postgres
+arete-mcp info postgres
 # Name:        PostgreSQL MCP
 # Repository:  https://github.com/modelcontextprotocol/server-postgres
 # License:     MIT
@@ -87,7 +87,7 @@ mcp-manager info postgres
 Add a marketplace server to your project's `.mcp-manager.yml`.
 
 ```bash
-mcp-manager install <name> [options]
+arete-mcp install <name> [options]
 ```
 
 **Options:**
@@ -100,16 +100,16 @@ mcp-manager install <name> [options]
 
 ```bash
 # Interactive install (prompts for env vars)
-mcp-manager install postgres
+arete-mcp install postgres
 
 # Non-interactive (keeps ${VAR} placeholders)
-mcp-manager install postgres --no-prompt
+arete-mcp install postgres --no-prompt
 
 # Install and pin versions
-mcp-manager install postgres --lock
+arete-mcp install postgres --lock
 
 # Preview only
-mcp-manager install postgres --dry-run
+arete-mcp install postgres --dry-run
 ```
 
 **Environment variables:** If a server requires env vars like `${DATABASE_URL}`, the CLI will prompt you interactively. Use `--no-prompt` to keep placeholders and set them later.
@@ -121,7 +121,7 @@ mcp-manager install postgres --dry-run
 Refresh quality scores for all marketplace servers. This is typically run by CI, not manually.
 
 ```bash
-mcp-manager marketplace-refresh --output marketplace/index.yaml
+arete-mcp marketplace-refresh --output marketplace/index.yaml
 ```
 
 **Options:**
@@ -164,5 +164,5 @@ The marketplace ships with official MCP reference servers:
 ## Security
 
 - **Curated only:** Only maintainers can add entries via PR
-- **Install is config-only:** `mcp-manager install` writes YAML, it never executes `npm install` or clones repositories
+- **Install is config-only:** `arete-mcp install` writes YAML, it never executes `npm install` or clones repositories
 - **Transparent scoring:** All quality data is in the repo; audit CI logs for verification

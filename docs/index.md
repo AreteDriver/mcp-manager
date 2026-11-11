@@ -1,4 +1,4 @@
-# mcp-manager
+# arete-mcp
 
 **One CLI to discover, diagnose, health-check, and sync MCP servers across Codex, Claude Code, Cursor, Windsurf, and more.**
 
@@ -6,7 +6,7 @@ Think of it as **docker-compose for MCP** — a single `.mcp-manager.yml` in you
 
 ---
 
-## Why mcp-manager?
+## Why arete-mcp?
 
 The Model Context Protocol (MCP) is the open standard for connecting AI agents to external tools — databases, browsers, filesystems, APIs. But every IDE stores MCP configs differently:
 
@@ -19,32 +19,32 @@ The Model Context Protocol (MCP) is the open standard for connecting AI agents t
 
 Your team can't share configs via git. Switching projects means manual copy-paste. One IDE has a server the others don't. You have no idea which servers are actually healthy.
 
-**mcp-manager solves this** with one CLI and one `.mcp-manager.yml` in your repo:
+**arete-mcp solves this** with one CLI and one `.mcp-manager.yml` in your repo:
 
 ```bash
 # See every MCP server across every IDE
-mcp-manager list
+arete-mcp list
 
 # Inspect supported target dialects and diagnose local configs
-mcp-manager targets
-mcp-manager doctor
+arete-mcp targets
+arete-mcp doctor
 
 # Check if they actually work (not just "starts")
-mcp-manager health --deep
+arete-mcp health --deep
 
 # Scaffold a project config
-mcp-manager init
+arete-mcp init
 
 # Sync it to Cursor (dry-run first, then commit)
-mcp-manager sync --ide cursor --dry-run
-mcp-manager sync --ide cursor
+arete-mcp sync --ide cursor --dry-run
+arete-mcp sync --ide cursor
 ```
 
 ---
 
 ## What Makes This Different
 
-| | **mcp-manager** | Manual IDE Config |
+| | **arete-mcp** | Manual IDE Config |
 |---|---|---|
 | **Config lives in repo** | ✅ `.mcp-manager.yml` committed with your code | ❌ Global client-native config files |
 | **Atomic write-back** | ✅ Backups + dry-run before touching IDE configs | ❌ Direct overwrite, no rollback |
@@ -63,6 +63,11 @@ pip install arete-mcp
 
 Requires Python 3.11+.
 
+Use `arete-mcp` for new scripts and documentation. The historical
+`mcp-manager` command remains available as a compatibility alias; project
+configuration filenames and the `mcp_manager` Python import namespace are
+unchanged.
+
 ---
 
 ## Quick Links
@@ -74,6 +79,8 @@ Requires Python 3.11+.
 - [Client Target Support](ide-support.md) — Target capabilities, scopes, and paths
 - [Contributing](contributing.md) — How to contribute
 - [Changelog](changelog.md) — What's new
+- [Repository-renaming checklist](repository-renaming-checklist.md) — Separate
+  checklist for a future GitHub repository rename
 
 ---
 

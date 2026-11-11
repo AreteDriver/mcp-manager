@@ -127,7 +127,7 @@ async def _open_transport_client(
 
     raise ProtocolError(
         "Protocol compatibility probing supports stdio and Streamable HTTP; "
-        "legacy SSE servers should use `mcp-manager health`."
+        "legacy SSE servers should use `arete-mcp health`."
     )
 
 

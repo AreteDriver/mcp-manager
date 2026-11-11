@@ -1,4 +1,4 @@
-"""Tests for project templates (`mcp-manager template`)."""
+"""Tests for project templates (`arete-mcp template`)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ runner = CliRunner()
 
 
 class TestTemplateList:
-    """Tests for `mcp-manager template list`."""
+    """Tests for `arete-mcp template list`."""
 
     def test_list_shows_templates(self) -> None:
         result = runner.invoke(app, ["template", "list"])
@@ -27,7 +27,7 @@ class TestTemplateList:
 
 
 class TestTemplateUse:
-    """Tests for `mcp-manager template use`."""
+    """Tests for `arete-mcp template use`."""
 
     def test_use_python_template(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)

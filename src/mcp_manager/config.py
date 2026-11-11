@@ -49,7 +49,7 @@ PROJECT_CONFIG_NAME = ".mcp.json"
 PROJECT_CONFIG_TOOL = "project"
 
 # ---------------------------------------------------------------------------
-# mcp-manager own paths.
+# mcp-manager own paths. These paths are retained for configuration compatibility.
 # ---------------------------------------------------------------------------
 
 

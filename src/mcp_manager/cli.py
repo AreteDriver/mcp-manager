@@ -1,4 +1,7 @@
-"""CLI entry point for mcp-manager."""
+"""CLI entry point for Arete MCP.
+
+The ``mcp-manager`` console script remains a supported compatibility alias.
+"""
 
 from __future__ import annotations
 
@@ -57,7 +60,7 @@ from mcp_manager.commands.uninstall import uninstall_impl
 from mcp_manager.exceptions import McpManagerError
 
 app = typer.Typer(
-    name="mcp-manager",
+    name="arete-mcp",
     help="Manage MCP servers across agentic IDEs.",
 )
 app.add_typer(project_app, name="project")
@@ -94,7 +97,7 @@ def main(
 ) -> None:
     """Manage MCP servers across agentic IDEs."""
     if version:
-        console.print(f"mcp-manager {__version__}")
+        console.print(f"arete-mcp {__version__}")
         raise typer.Exit()
     if ctx.invoked_subcommand is None:
         console.print(ctx.get_help())
@@ -240,7 +243,7 @@ def add(
     transport: str = typer.Option("stdio", "--transport", "-t", help="Transport type."),
     args: list[str] | None = typer.Option(None, "--arg", help="Args for stdio (repeatable)."),
 ) -> None:
-    """Add a new MCP server to the mcp-manager registry."""
+    """Add a new MCP server to the arete-mcp registry."""
     try:
         add_impl(name=name, command=command, url=url, transport=transport, args=args)
     except McpManagerError:
@@ -251,7 +254,7 @@ def add(
 def remove(
     name: str = typer.Argument(..., help="Server name to remove."),
 ) -> None:
-    """Remove a server from the mcp-manager registry."""
+    """Remove a server from the arete-mcp registry."""
     try:
         remove_impl(name=name)
     except McpManagerError:
@@ -502,7 +505,7 @@ def marketplace_install(
 def server_install(
     name: str = typer.Argument(..., help="Server name from registry."),
     ide: str | None = typer.Option(
-        None, "--ide", "-i", help="Client target (run `mcp-manager targets` to list)."
+        None, "--ide", "-i", help="Client target (run `arete-mcp targets` to list)."
     ),
     all_ides: bool = typer.Option(False, "--all", help="Install to all supported IDEs."),
     create: bool = typer.Option(False, "--create", help="Create IDE config if missing."),
@@ -533,7 +536,7 @@ def server_install(
 def server_uninstall(
     name: str = typer.Argument(..., help="Server name to uninstall."),
     ide: str | None = typer.Option(
-        None, "--ide", "-i", help="Client target (run `mcp-manager targets` to list)."
+        None, "--ide", "-i", help="Client target (run `arete-mcp targets` to list)."
     ),
     all_ides: bool = typer.Option(False, "--all", help="Uninstall from all IDEs that have it."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing."),
@@ -585,7 +588,7 @@ def registry_login(
 
     [yellow]Security warning:[/yellow] passing tokens via CLI flags is
     insecure — they appear in shell history and process listings.
-    Prefer [green]mcp-manager registry login[/green] (interactive) or
+    Prefer [green]arete-mcp registry login[/green] (interactive) or
     set [cyan]MCP_MANAGER_REGISTRY_TOKEN[/cyan] /
     [cyan]MCP_MANAGER_REGISTRY_USER[/cyan] env vars.
     """
@@ -593,7 +596,7 @@ def registry_login(
     if pw_stdin and effective_pw is None:
         console.print(
             "[red]Error:[/red] --password-stdin requires piped input.\n"
-            "[dim]Example: echo \x27secret\x27 | mcp-manager registry login "
+            "[dim]Example: echo \x27secret\x27 | arete-mcp registry login "
             f"{url} --user alice --password-stdin[/dim]"
         )
         raise typer.Exit(1)

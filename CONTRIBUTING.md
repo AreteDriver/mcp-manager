@@ -1,4 +1,4 @@
-# Contributing to mcp-manager
+# Contributing to arete-mcp
 
 Thank you for considering a contribution! This project is a developer-tooling CLI — we value correctness, safety, and clear error messages over cleverness.
 
@@ -6,7 +6,7 @@ Thank you for considering a contribution! This project is a developer-tooling CL
 
 ```bash
 git clone https://github.com/AreteDriver/mcp-manager.git
-cd mcp-manager
+cd arete-mcp
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"

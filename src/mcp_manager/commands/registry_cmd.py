@@ -43,7 +43,7 @@ def _build_headers(
     if token and not os.environ.get("CI"):
         console.print(
             "[yellow]Warning: passing tokens via CLI is insecure. "
-            "Use `mcp-manager registry login` instead.[/yellow]"
+            "Use `arete-mcp registry login` instead.[/yellow]"
         )
 
     return resolve_auth_headers(

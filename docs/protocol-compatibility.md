@@ -1,7 +1,7 @@
 # Protocol compatibility
 
 MCP 2026-07-28 replaces transport initialization and protocol sessions with
-self-describing requests. `mcp-manager` supports the modern protocol through
+self-describing requests. `arete-mcp` supports the modern protocol through
 the official Python SDK while retaining an explicit compatibility path for
 handshake-era servers.
 
@@ -10,7 +10,7 @@ handshake-era servers.
 Probe a server already present in a discovered client configuration:
 
 ```bash
-mcp-manager doctor --protocol my-server
+arete-mcp doctor --protocol my-server
 ```
 
 The probe performs this sequence:
@@ -28,7 +28,7 @@ Use `--json` for automation. Use `--strict-modern` to fail when the server
 requires legacy fallback:
 
 ```bash
-mcp-manager doctor --protocol my-server --strict-modern --json
+arete-mcp doctor --protocol my-server --strict-modern --json
 ```
 
 The result identifies the negotiated protocol era and version, tool count,
@@ -41,7 +41,7 @@ Modern Streamable HTTP requests are self-contained and do not require an
 and, for named operations, `Mcp-Name` headers so an HTTP gateway can route and
 authorize requests without parsing the JSON body.
 
-The official SDK supplies the protocol routing headers. `mcp-manager` resolves
+The official SDK supplies the protocol routing headers. `arete-mcp` resolves
 configured header and bearer-token environment references immediately before
 opening the HTTP client. Diagnostic output reports missing variable names but
 never prints credential values. Client-managed Codex authentication modes such
@@ -62,8 +62,8 @@ Adopt the protocol in two stages:
 
 Legacy compatibility remains available through automatic negotiation. If a
 modern server migration regresses, restore the prior server release and remove
-the strict gate; no mcp-manager registry or client configuration migration is
-required. Legacy SSE remains available through `mcp-manager health`, but the
+the strict gate; no arete-mcp registry or client configuration migration is
+required. Legacy SSE remains available through `arete-mcp health`, but the
 new compatibility probe is intentionally limited to stdio and Streamable HTTP.
 
 ## Verification coverage

@@ -1,4 +1,4 @@
-"""Built-in project templates for `mcp-manager template use`."""
+"""Built-in project templates for `arete-mcp template use`."""
 
 from __future__ import annotations
 

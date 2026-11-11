@@ -1,6 +1,6 @@
 # Security Model
 
-MCP Manager handles configuration that can launch local processes and reference
+Arete MCP handles configuration that can launch local processes and reference
 credentials. Its primary security objective is to make operator-authorized
 changes predictable, reviewable, and recoverable without claiming that a
 third-party MCP server is trustworthy.
@@ -48,7 +48,7 @@ device flow are preferred.
 - A compromised client can reinterpret otherwise valid configuration.
 - Plaintext credentials remain readable to the owning OS account.
 - Network destinations selected by the operator can observe requests made to them.
-- Availability and semantic correctness of third-party servers are outside MCP Manager's control.
+- Availability and semantic correctness of third-party servers are outside Arete MCP's control.
 
 Report suspected vulnerabilities through the private advisory process described
 in the repository `SECURITY.md`.

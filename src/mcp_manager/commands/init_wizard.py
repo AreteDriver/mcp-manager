@@ -1,4 +1,4 @@
-"""Onboarding wizard implementation for `mcp-manager init`."""
+"""Onboarding wizard implementation for `arete-mcp init`."""
 
 from __future__ import annotations
 

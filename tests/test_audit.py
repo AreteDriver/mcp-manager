@@ -211,14 +211,14 @@ class TestAuditCli:
         assert result.exit_code == 0
         assert output.exists()
         content = output.read_text(encoding="utf-8")
-        assert "# mcp-manager audit runbook" in content
+        assert "# arete-mcp audit runbook" in content
         assert "test_tool" in content
         assert "OBSERVED in prompt" in content
 
     def test_audit_runbook_stdout(self, sample_spec: Path) -> None:
         result = runner.invoke(app, ["audit", "runbook", "--probe-spec", str(sample_spec)])
         assert result.exit_code == 0
-        assert "# mcp-manager audit runbook" in result.output
+        assert "# arete-mcp audit runbook" in result.output
 
     def test_audit_serve_dry_run_info(self, sample_spec: Path) -> None:
         with patch("mcp_manager.commands.audit_cmd.build_fastmcp_server") as mock_build:

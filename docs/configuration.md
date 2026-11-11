@@ -84,9 +84,9 @@ servers:
 Filter commands by tag:
 
 ```bash
-mcp-manager health --tag backend
-mcp-manager sync --ide cursor --exclude-tag experimental
-mcp-manager monitor --tag production
+arete-mcp health --tag backend
+arete-mcp sync --ide cursor --exclude-tag experimental
+arete-mcp monitor --tag production
 ```
 
 ---
@@ -130,7 +130,7 @@ files from the operator's machine. Remote config bodies are limited to 1 MiB.
 
 ## Validation
 
-Run `mcp-manager validate` to check your config:
+Run `arete-mcp validate` to check your config:
 
 - YAML syntax valid
 - Every server has `command` or `url`
@@ -146,8 +146,8 @@ With `--strict`, also runs deep health checks on all servers.
 Pin exact versions for reproducible CI:
 
 ```bash
-mcp-manager lock                    # Generate .mcp-manager.lock
-mcp-manager lock --check            # CI gate: fail if out of date
+arete-mcp lock                    # Generate .mcp-manager.lock
+arete-mcp lock --check            # CI gate: fail if out of date
 ```
 
 Example `.mcp-manager.lock`:
